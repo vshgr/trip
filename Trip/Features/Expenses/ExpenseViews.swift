@@ -4,7 +4,7 @@ import UIKit
 struct ExpensesView: View {
     @ObservedObject var store: ExpenseStore
     let trip: TravelTrip
-    @State private var section: ExpenseSection = .new
+    @State private var section: ExpenseSection = .expenses
     @State private var title = ""
     @State private var amount = ""
     @State private var currency: ExpenseCurrency = .eur
@@ -19,10 +19,8 @@ struct ExpensesView: View {
                 ExpenseSectionPicker(selection: $section)
 
                 switch section {
-                case .new:
-                    newExpenseSection
-                case .balance:
-                    balanceSection
+                case .expenses:
+                    expensesSection
                 case .history:
                     historySection
                 }
@@ -95,6 +93,13 @@ struct ExpensesView: View {
             canAdd: canAddExpense
         ) {
             addExpense()
+        }
+    }
+
+    private var expensesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            newExpenseSection
+            balanceSection
         }
     }
 
@@ -171,7 +176,6 @@ struct ExpensesView: View {
         title = ""
         amount = ""
         selectedInvolvedParticipants = Set(trip.participants)
-        section = .history
         dismissKeyboard()
     }
 
@@ -206,8 +210,7 @@ struct ExpensesView: View {
 }
 
 enum ExpenseSection: String, CaseIterable, Identifiable {
-    case new
-    case balance
+    case expenses
     case history
 
     var id: String {
@@ -216,10 +219,8 @@ enum ExpenseSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .new:
-            return "Новая"
-        case .balance:
-            return "Баланс"
+        case .expenses:
+            return "Обзор"
         case .history:
             return "История"
         }

@@ -44,3 +44,73 @@ func tripDateRangeString(start: Date, end: Date) -> String {
     let endText = end.formatted(.dateTime.day().month(.wide).year())
     return "\(startText) - \(endText)"
 }
+
+struct TripProgress: Equatable {
+    let elapsedDays: Int
+    let totalDays: Int
+
+    var fraction: Double {
+        guard totalDays > 0, elapsedDays > 0 else {
+            return 0
+        }
+
+        return min(Double(elapsedDays) / Double(totalDays), 1)
+    }
+
+    var label: String {
+        "\(elapsedDays) из \(totalDays) дн."
+    }
+
+    static func make(start: Date, end: Date, today: Date = Date(), calendar: Calendar = .current) -> TripProgress {
+        let startOfTrip = calendar.startOfDay(for: start)
+        let endOfTrip = calendar.startOfDay(for: end)
+        let currentDay = calendar.startOfDay(for: today)
+        let normalizedEnd = max(startOfTrip, endOfTrip)
+        let totalDays = (calendar.dateComponents([.day], from: startOfTrip, to: normalizedEnd).day ?? 0) + 1
+
+        guard currentDay >= startOfTrip else {
+            return TripProgress(elapsedDays: 0, totalDays: totalDays)
+        }
+
+        let cappedCurrentDay = min(currentDay, normalizedEnd)
+        let elapsedDays = (calendar.dateComponents([.day], from: startOfTrip, to: cappedCurrentDay).day ?? 0) + 1
+        return TripProgress(elapsedDays: min(max(elapsedDays, 0), totalDays), totalDays: totalDays)
+    }
+}
+
+struct TripProgressBar: View {
+    let trip: TravelTrip
+
+    private var progress: TripProgress {
+        TripProgress.make(start: trip.startDate, end: trip.endDate)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Spacer(minLength: 8)
+
+                Text(progress.label)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(progress.elapsedDays == 0 ? AppColors.faint : AppColors.accent)
+                    .lineLimit(1)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppColors.placeholder)
+
+                    if progress.fraction > 0 {
+                        Capsule()
+                            .fill(AppColors.accent)
+                            .frame(width: max(proxy.size.width * progress.fraction, 6))
+                    }
+                }
+            }
+            .frame(height: 7)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Прогресс поездки: \(progress.label)")
+    }
+}
