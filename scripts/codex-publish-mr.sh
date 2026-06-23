@@ -66,7 +66,7 @@ echo "Committing"
 git commit -m "$description"
 
 echo "Pushing"
-git push -u origin "$branch"
+git -c http.postBuffer=157286400 push -u origin "$branch"
 
 remote_url="$(git remote get-url origin)"
 repo_path="$remote_url"
