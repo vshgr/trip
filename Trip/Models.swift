@@ -1070,8 +1070,8 @@ enum ExpenseCurrency: String, Codable, CaseIterable, Identifiable {
     case eur = "EUR"
     case usd = "USD"
     case rub = "RUB"
-    case gbp = "GBP"
-    case turkishLira = "TRY"
+    case kzt = "KZT"
+    case jpy = "JPY"
 
     var id: String {
         rawValue
@@ -1085,10 +1085,10 @@ enum ExpenseCurrency: String, Codable, CaseIterable, Identifiable {
             return "USD"
         case .rub:
             return "RUB"
-        case .gbp:
-            return "GBP"
-        case .turkishLira:
-            return "TRY"
+        case .kzt:
+            return "KZT"
+        case .jpy:
+            return "JPY"
         }
     }
 }
