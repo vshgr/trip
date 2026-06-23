@@ -1,101 +1,101 @@
 # Trip
 
-Trip is a SwiftUI iOS app for planning trips, tracking a day-by-day itinerary, and keeping travel expenses in one place. The project also includes a WidgetKit extension that shows the next city and the nearest planned activity for the Europe trip.
+Trip - iOS-приложение на SwiftUI для планирования поездок, ведения маршрута по дням и учета дорожных трат. В проект также входит виджет WidgetKit, который показывает следующий город и ближайший пункт плана для поездки по Европе.
 
-## Features
+## Основные возможности
 
-### Trip catalog
+### Каталог поездок
 
-- Shows all saved trips on the main screen.
-- Includes a predefined Europe Trip for July 3-21, 2026.
-- Supports creating, editing, and deleting custom trips.
-- Stores trip title, date range, cities, and participants.
-- Shows per-trip summary cards with date range, route, participant count, plan progress, and expense totals.
+- Главный экран со списком всех сохраненных поездок.
+- Предустановленная поездка `Europe Trip` на 3-21 июля 2026 года.
+- Создание, редактирование и удаление пользовательских поездок.
+- Хранение названия поездки, дат, городов и участников.
+- Карточки поездок с датами, маршрутом, количеством участников, прогрессом заполнения плана и суммой трат.
 
-### Day-by-day planning
+### План поездки по дням
 
-- Displays a calendar-style overview for the selected trip.
-- Uses city colors to make route changes easy to scan.
-- Shows how full each day is as an occupancy percentage.
-- Lets the user switch a day's city from the available trip cities.
-- Opens a detailed timeline for the selected day.
+- Календарный обзор выбранной поездки.
+- Цветовые метки городов, чтобы маршрут было легко читать.
+- Процент заполненности каждого дня.
+- Возможность изменить город конкретного дня.
+- Детальный таймлайн для выбранной даты.
 
-### Timeline editor
+### Редактор таймлайна
 
-- Shows planned items on an hourly day grid.
-- Supports scheduled items with start/end dates and times.
-- Supports unscheduled period-based items such as morning, day, evening, and night.
-- Handles activities that continue across midnight or span multiple days.
-- Lets the user add, edit, delete, reorder, and reschedule plan items.
-- Supports drag-and-drop between timeline hours and unscheduled sections.
-- Tracks item categories: transfer, rest, walk, sight, food, and shopping.
-- Tracks ticket requirements and whether tickets are already bought.
-- Normalizes time input such as `930`, `9:30`, and `09.30`.
+- Почасовая сетка дня для запланированных активностей.
+- Добавление пунктов плана со временем начала и окончания.
+- Поддержка пунктов без точного времени: утро, день, вечер, ночь.
+- Поддержка активностей, которые переходят через полночь или длятся несколько дней.
+- Редактирование, удаление, переупорядочивание и перенос пунктов плана.
+- Drag-and-drop между часами таймлайна и блоками без точного времени.
+- Категории пунктов: перемещение, отдых, прогулка, достопримечательность, еда, шоппинг.
+- Отметки о необходимости билета и о том, куплен ли билет.
+- Нормализация ввода времени: например, `930`, `9:30` и `09.30`.
 
-### Europe trip status
+### Статус поездки по Европе
 
-- Shows a dedicated status widget inside the app for the predefined Europe route.
-- Highlights the next city, days until arrival, the next planned day, and the nearest activity.
-- Uses the route data from the editable itinerary so changes are reflected in the status.
+- Отдельный статус-блок внутри приложения для предустановленного маршрута по Европе.
+- Отображение следующего города, количества дней до него, ближайшего дня с планом и ближайшей активности.
+- Данные берутся из редактируемого маршрута, поэтому изменения в плане отражаются в статусе.
 
-### Expenses
+### Учет трат
 
-- Lets the user add expenses per trip.
-- Supports participant-specific expenses.
-- Supports RUB, EUR, USD, GBP, and TRY.
-- Shows totals by currency.
-- Calculates an approximate RUB total when exchange rates are available.
-- Caches expenses and exchange rates locally.
-- Fetches exchange rates from the Central Bank of Russia XML feed.
-- Supports filtering expenses by participant.
-- Lets the user delete individual expenses.
+- Добавление расходов для конкретной поездки.
+- Привязка расходов к участникам.
+- Поддержка валют: RUB, EUR, USD, GBP и TRY.
+- Итоги по каждой валюте.
+- Приблизительный общий итог в рублях при наличии курсов валют.
+- Локальное кеширование расходов и курсов.
+- Загрузка курсов валют из XML-фида Центрального банка России.
+- Фильтрация расходов по участнику.
+- Удаление отдельных расходов.
 
-### Widget
+### Виджет
 
-- Includes a WidgetKit extension named `TripWidget`.
-- Supports small and medium widget families.
-- Shows the next city, days until it, route progress, and the next plan item.
-- Refreshes periodically and reads shared Europe Trip data through the app group `group.com.alisa.trip`.
+- Расширение WidgetKit `TripWidget`.
+- Поддержка маленького и среднего размеров виджета.
+- Отображение следующего города, количества дней до него, прогресса маршрута и ближайшего пункта плана.
+- Периодическое обновление виджета.
+- Чтение данных Europe Trip через app group `group.com.alisa.trip`.
 
-### Persistence
+### Хранение данных
 
-- Stores trips, itinerary edits, expenses, and cached rates in `UserDefaults`.
-- Stores the Europe Trip itinerary in shared app group defaults for the widget.
-- Migrates older saved itinerary data where possible.
-- Falls back to bundled itinerary data when no saved state exists.
+- Поездки, изменения маршрута, расходы и кеш курсов сохраняются в `UserDefaults`.
+- Данные Europe Trip дополнительно сохраняются в общий app group, чтобы их мог читать виджет.
+- Есть миграция старых сохраненных данных маршрута.
+- Если сохраненных данных нет, используется встроенный маршрут из проекта.
 
-## Project Structure
+## Структура проекта
 
-- `Trip/TripApp.swift` - app entry point.
-- `Trip/ContentView.swift` - SwiftUI screens and UI components.
-- `Trip/Models.swift` - models, stores, persistence, scheduling logic, expense logic, and exchange-rate parsing.
-- `Trip/ItineraryData.swift` - bundled Europe Trip route and default day data.
-- `TripWidget/TripWidget.swift` - WidgetKit timeline provider, widget views, and widget status logic.
-- `Trip.xcodeproj` - Xcode project.
-- `scripts/codex-publish-mr.sh` - helper script for publishing Codex changes through a new branch and PR.
+- `Trip/TripApp.swift` - точка входа приложения.
+- `Trip/ContentView.swift` - SwiftUI-экраны и UI-компоненты.
+- `Trip/Models.swift` - модели, сторы, сохранение данных, логика расписания, расходы и парсинг курсов валют.
+- `Trip/ItineraryData.swift` - встроенный маршрут Europe Trip и дефолтные дни поездки.
+- `TripWidget/TripWidget.swift` - WidgetKit timeline provider, UI виджета и логика статуса поездки.
+- `Trip.xcodeproj` - Xcode-проект.
+- `scripts/codex-publish-mr.sh` - скрипт для публикации изменений Codex через новую ветку и PR.
 
-## Requirements
+## Требования
 
-- Xcode with iOS SDK support.
-- iOS target with SwiftUI and WidgetKit.
-- App Group capability configured for `group.com.alisa.trip` if the widget should read live app data.
+- Xcode с поддержкой iOS SDK.
+- iOS-проект на SwiftUI и WidgetKit.
+- Для работы виджета с живыми данными нужен App Group capability: `group.com.alisa.trip`.
 
-## Running
+## Запуск
 
-1. Open `Trip.xcodeproj` in Xcode.
-2. Select the `Trip` scheme.
-3. Choose an iOS simulator or device.
-4. Build and run.
+1. Открыть `Trip.xcodeproj` в Xcode.
+2. Выбрать схему `Trip`.
+3. Выбрать iOS Simulator или устройство.
+4. Собрать и запустить приложение.
 
-For widget testing, run the app at least once so it can write shared itinerary data, then add the `Europe Trip` widget on the simulator or device.
+Для проверки виджета нужно хотя бы один раз открыть приложение, чтобы оно записало данные в общий app group. После этого можно добавить виджет `Europe Trip` на симуляторе или устройстве.
 
-## Git Workflow
+## Git workflow
 
-The default branch is `main`.
+Основная ветка проекта - `main`.
 
-Future Codex updates should be made in separate branches named `codex/<description>`. When publishing a merge request, use:
+Новые изменения от Codex нужно делать в отдельных ветках формата `codex/<описание>`. Для публикации merge request используется скрипт:
 
 ```bash
-scripts/codex-publish-mr.sh "short change description"
+scripts/codex-publish-mr.sh "краткое описание изменений"
 ```
-
