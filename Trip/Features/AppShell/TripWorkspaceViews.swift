@@ -99,6 +99,9 @@ struct TripWorkspaceHeader: View {
                     .foregroundStyle(AppColors.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
+
+                TripProgressBar(trip: trip)
+                    .padding(.top, 5)
             }
 
             HStack(spacing: 6) {

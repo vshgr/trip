@@ -295,7 +295,7 @@ final class TripStore: ObservableObject {
     nonisolated static let cities = ["Барселона", "Ибица", "Ницца", "Париж", "Брюссель", "Амстердам"]
     nonisolated static let tripDates = ItineraryData.days.map(\.date)
 
-    private let storageKeyPrefix = "trip.days.editable.v5"
+    private let storageKeyPrefix = "trip.days.editable.v6"
     private let legacyStorageKey = "trip.days.editable.v4"
     private var activeTripID = TripCatalogStore.defaultTripID
     private var activeTrip = TripCatalogStore.defaultTrip
@@ -998,7 +998,7 @@ final class TripCatalogStore: ObservableObject {
         }
     }
 
-    private let storageKey = "trip.catalog.v1"
+    private let storageKey = "trip.catalog.v2"
     nonisolated static let defaultTripID = UUID(uuidString: "7A835DF2-A238-4C4B-9F36-5DA11A42B40E")!
 
     init() {
@@ -1061,7 +1061,8 @@ final class TripCatalogStore: ObservableObject {
             title: ItineraryData.tripTitle,
             startDate: start,
             endDate: end,
-            cities: TripStore.cities
+            cities: TripStore.cities,
+            participants: ["Алиса", "Яна", "Уля", "Маша"]
         )
     }
 }
@@ -1164,7 +1165,7 @@ final class ExpenseStore: ObservableObject {
     @Published var isLoadingRates = false
     @Published var ratesError: String?
 
-    private let expensesKey = "trip.expenses.v1"
+    private let expensesKey = "trip.expenses.v2"
     private let ratesKey = "trip.expense.rates.v1"
     private let ratesDateKey = "trip.expense.rates.date.v1"
 
@@ -1173,12 +1174,75 @@ final class ExpenseStore: ObservableObject {
             let data = UserDefaults.standard.data(forKey: expensesKey),
             let decoded = try? JSONDecoder().decode([ExpenseItem].self, from: data)
         {
-            expenses = decoded
+            expenses = decoded.isEmpty ? Self.demoExpenses : decoded
         } else {
-            expenses = []
+            expenses = Self.demoExpenses
         }
 
         loadCachedRates()
+    }
+
+    private nonisolated static var demoExpenses: [ExpenseItem] {
+        [
+            ExpenseItem(
+                tripID: TripCatalogStore.defaultTripID,
+                participantName: "Алиса",
+                involvedParticipantNames: ["Алиса", "Яна", "Уля", "Маша"],
+                title: "Апартаменты в Барселоне",
+                amount: 620,
+                currency: .eur,
+                createdAt: demoDate(day: 4, hour: 12)
+            ),
+            ExpenseItem(
+                tripID: TripCatalogStore.defaultTripID,
+                participantName: "Яна",
+                involvedParticipantNames: ["Алиса", "Яна", "Уля", "Маша"],
+                title: "Билеты в Саграду",
+                amount: 104,
+                currency: .eur,
+                createdAt: demoDate(day: 5, hour: 13)
+            ),
+            ExpenseItem(
+                tripID: TripCatalogStore.defaultTripID,
+                participantName: "Уля",
+                involvedParticipantNames: ["Алиса", "Уля", "Маша"],
+                title: "Такси из аэропорта",
+                amount: 48,
+                currency: .eur,
+                createdAt: demoDate(day: 7, hour: 11)
+            ),
+            ExpenseItem(
+                tripID: TripCatalogStore.defaultTripID,
+                participantName: "Маша",
+                involvedParticipantNames: ["Алиса", "Яна", "Уля", "Маша"],
+                title: "Ужин тапасами",
+                amount: 156,
+                currency: .eur,
+                createdAt: demoDate(day: 4, hour: 21)
+            ),
+            ExpenseItem(
+                tripID: TripCatalogStore.defaultTripID,
+                participantName: "Алиса",
+                involvedParticipantNames: ["Алиса", "Яна"],
+                title: "Кофе и завтраки",
+                amount: 38,
+                currency: .eur,
+                createdAt: demoDate(day: 8, hour: 10)
+            ),
+            ExpenseItem(
+                tripID: TripCatalogStore.defaultTripID,
+                participantName: "Яна",
+                involvedParticipantNames: ["Алиса", "Яна", "Уля", "Маша"],
+                title: "Страховка",
+                amount: 7200,
+                currency: .rub,
+                createdAt: demoDate(day: 3, hour: 16)
+            )
+        ]
+    }
+
+    private nonisolated static func demoDate(day: Int, hour: Int) -> Date {
+        Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 7, day: day, hour: hour)) ?? Date()
     }
 
     func expenses(for tripID: UUID) -> [ExpenseItem] {
@@ -1374,6 +1438,10 @@ final class ExpenseStore: ObservableObject {
 
     private func loadCachedRates() {
         rates[.rub] = 1
+        rates[.eur] = 100
+        rates[.usd] = 92
+        rates[.gbp] = 118
+        rates[.turkishLira] = 2.8
         if
             let data = UserDefaults.standard.data(forKey: ratesKey),
             let decoded = try? JSONDecoder().decode([ExpenseCurrency: Double].self, from: data)

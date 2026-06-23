@@ -113,96 +113,82 @@ struct TripCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        if isSelected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(AppColors.success)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            if isSelected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(AppColors.success)
+                            }
+
+                            Text(trip.title)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(AppColors.ink)
+                                .lineLimit(2)
                         }
 
-                        Text(trip.title)
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
-                            .lineLimit(2)
-                    }
-
-                    Text(tripDateRangeString(start: trip.startDate, end: trip.endDate))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.muted)
-
-                    Text(totalInRubles.map { rubleString($0) } ?? "Курс недоступен")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(AppColors.accent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.76)
-
-                    if !trip.participants.isEmpty {
-                        Text(trip.participants.joined(separator: ", "))
-                            .font(.caption.weight(.semibold))
+                        Text(tripDateRangeString(start: trip.startDate, end: trip.endDate))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppColors.muted)
-                            .lineLimit(2)
-                    }
-                }
 
-                Spacer()
-
-                HStack(spacing: 8) {
-                    Button {
-                        onEdit()
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.subheadline.weight(.bold))
+                        Text(totalInRubles.map { rubleString($0) } ?? "Курс недоступен")
+                            .font(.headline.weight(.bold))
                             .foregroundStyle(AppColors.accent)
-                            .frame(width: 34, height: 34)
-                            .background(AppColors.accentSoft, in: Circle())
-                    }
-                    .buttonStyle(.plain)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.76)
 
-                    Button {
-                        onDelete()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColors.danger)
-                            .frame(width: 34, height: 34)
-                            .background(AppColors.accentSoft, in: Circle())
+                        if !trip.participants.isEmpty {
+                            Text(trip.participants.joined(separator: ", "))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.muted)
+                                .lineLimit(2)
+                        }
                     }
-                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Button {
+                            onEdit()
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(AppColors.accent)
+                                .frame(width: 34, height: 34)
+                                .background(AppColors.accentSoft, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            onDelete()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(AppColors.danger)
+                                .frame(width: 34, height: 34)
+                                .background(AppColors.accentSoft, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+
+                TripProgressBar(trip: trip)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Города")
-                    .font(.caption.weight(.heavy))
-                    .foregroundStyle(AppColors.muted)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Города поездки")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(AppColors.ink)
 
-                VStack(spacing: 0) {
-                    ForEach(Array(trip.cities.enumerated()), id: \.offset) { index, city in
-                        HStack(spacing: 10) {
-                            Text("\(index + 1)")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(AppColors.muted)
-                                .frame(width: 24, height: 24)
-                                .background(Color.white, in: Circle())
-
-                            Text(city)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(AppColors.ink)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(.vertical, 8)
-
-                        if index < trip.cities.count - 1 {
-                            Divider()
-                                .padding(.leading, 34)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Text(trip.cities.isEmpty ? "Маршрут не задан" : trip.cities.joined(separator: " → "))
+                    .font(.subheadline)
+                    .foregroundStyle(trip.cities.isEmpty ? AppColors.muted : AppColors.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(nil)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(18)
@@ -359,10 +345,10 @@ struct TripEditorView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         } else {
-                            VStack(spacing: 0) {
-                                ForEach(Array(selectedCities.enumerated()), id: \.offset) { index, city in
+                            List {
+                                ForEach(selectedCities, id: \.self) { city in
                                     HStack(spacing: 10) {
-                                        Text("\(index + 1)")
+                                        Text("\((selectedCities.firstIndex(of: city) ?? 0) + 1)")
                                             .font(.caption.weight(.bold))
                                             .foregroundStyle(AppColors.muted)
                                             .frame(width: 24, height: 24)
@@ -374,7 +360,7 @@ struct TripEditorView: View {
                                             .frame(maxWidth: .infinity, alignment: .leading)
 
                                         Button {
-                                            selectedCities.remove(at: index)
+                                            selectedCities.removeAll { $0 == city }
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .font(.body.weight(.bold))
@@ -383,16 +369,21 @@ struct TripEditorView: View {
                                         .buttonStyle(.plain)
                                         .accessibilityLabel("Удалить город")
                                     }
-                                    .padding(.vertical, 10)
-
-                                    if index < selectedCities.count - 1 {
-                                        Divider()
-                                            .padding(.leading, 34)
-                                    }
+                                    .padding(.vertical, 4)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 8))
+                                    .listRowBackground(AppColors.itemBackground)
+                                }
+                                .onMove { source, destination in
+                                    selectedCities.move(fromOffsets: source, toOffset: destination)
                                 }
                             }
-                            .padding(.horizontal, 12)
+                            .listStyle(.plain)
+                            .scrollContentBackground(.hidden)
+                            .scrollDisabled(true)
+                            .environment(\.editMode, .constant(.active))
+                            .frame(height: CGFloat(selectedCities.count) * 58)
                             .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
 
                         TextField("Найти город", text: $cityQuery)
@@ -455,6 +446,7 @@ struct TripEditorView: View {
                     }
                 }
                 .padding(18)
+                .padding(.bottom, 24)
             }
             .background(Color.white.ignoresSafeArea())
             .navigationTitle(trip == nil ? "Новая поездка" : "Редактировать")
