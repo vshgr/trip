@@ -1070,6 +1070,8 @@ enum ExpenseCurrency: String, Codable, CaseIterable, Identifiable {
     case eur = "EUR"
     case usd = "USD"
     case rub = "RUB"
+    case gbp = "GBP"
+    case turkishLira = "TRY"
 
     var id: String {
         rawValue
@@ -1083,6 +1085,10 @@ enum ExpenseCurrency: String, Codable, CaseIterable, Identifiable {
             return "USD"
         case .rub:
             return "RUB"
+        case .gbp:
+            return "GBP"
+        case .turkishLira:
+            return "TRY"
         }
     }
 }
@@ -1091,10 +1097,59 @@ struct ExpenseItem: Identifiable, Codable, Equatable {
     var id = UUID()
     var tripID: UUID?
     var participantName: String?
+    var involvedParticipantNames: [String]?
     var title: String
     var amount: Double
     var currency: ExpenseCurrency
     var createdAt: Date = Date()
+
+    func involvedParticipants(from tripParticipants: [String]) -> [String] {
+        let participantSet = Set(tripParticipants)
+        let rawParticipants = involvedParticipantNames ?? tripParticipants
+        var seenParticipants = Set<String>()
+
+        return rawParticipants
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && participantSet.contains($0) }
+            .filter { seenParticipants.insert($0).inserted }
+    }
+}
+
+struct ExpenseBalance: Identifiable, Equatable {
+    var id: String {
+        "\(participantName)-\(currency.rawValue)"
+    }
+
+    let participantName: String
+    let currency: ExpenseCurrency
+    let paid: Double
+    let share: Double
+    let balance: Double
+}
+
+struct ExpenseSettlement: Identifiable, Equatable {
+    var id: String {
+        "\(from)-\(to)-\(currency.rawValue)-\(amount)"
+    }
+
+    let from: String
+    let to: String
+    let amount: Double
+    let currency: ExpenseCurrency
+}
+
+struct ExpenseSplitSummary: Equatable {
+    let balances: [ExpenseBalance]
+    let settlements: [ExpenseSettlement]
+    let ignoredExpenseCount: Int
+
+    var hasParticipants: Bool {
+        !balances.isEmpty
+    }
+
+    var hasSettlements: Bool {
+        !settlements.isEmpty
+    }
 }
 
 @MainActor
@@ -1161,13 +1216,118 @@ final class ExpenseStore: ObservableObject {
         }
     }
 
-    func addExpense(title: String, amount: Double, currency: ExpenseCurrency, tripID: UUID, participantName: String?) {
+    func splitSummary(for trip: TravelTrip) -> ExpenseSplitSummary {
+        var seenParticipants = Set<String>()
+        let participants = trip.participants
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { seenParticipants.insert($0).inserted }
+
+        guard !participants.isEmpty else {
+            return ExpenseSplitSummary(balances: [], settlements: [], ignoredExpenseCount: 0)
+        }
+
+        let participantSet = Set(participants)
+        let tripExpenses = expenses(for: trip.id)
+        let sharedExpenses = tripExpenses.filter { expense in
+            guard let payer = expense.participantName else {
+                return false
+            }
+
+            return participantSet.contains(payer) && !expense.involvedParticipants(from: participants).isEmpty
+        }
+        let ignoredExpenseCount = tripExpenses.count - sharedExpenses.count
+
+        var balancesByCurrency: [ExpenseCurrency: [String: ExpenseBalanceDraft]] = [:]
+        for currency in ExpenseCurrency.allCases {
+            balancesByCurrency[currency] = Dictionary(
+                uniqueKeysWithValues: participants.map { participant in
+                    (participant, ExpenseBalanceDraft(paid: 0, share: 0))
+                }
+            )
+        }
+
+        for expense in sharedExpenses {
+            guard var currencyBalances = balancesByCurrency[expense.currency] else {
+                continue
+            }
+
+            let involvedParticipants = expense.involvedParticipants(from: participants)
+            let share = expense.amount / Double(involvedParticipants.count)
+            for participant in involvedParticipants {
+                currencyBalances[participant, default: ExpenseBalanceDraft(paid: 0, share: 0)].share += share
+            }
+
+            if let payer = expense.participantName {
+                currencyBalances[payer, default: ExpenseBalanceDraft(paid: 0, share: 0)].paid += expense.amount
+            }
+
+            balancesByCurrency[expense.currency] = currencyBalances
+        }
+
+        let balances = ExpenseCurrency.allCases.flatMap { currency in
+            participants.compactMap { participant -> ExpenseBalance? in
+                guard let draft = balancesByCurrency[currency]?[participant] else {
+                    return nil
+                }
+
+                let balance = draft.paid - draft.share
+                guard draft.paid > 0 || draft.share > 0 || abs(balance) >= 0.005 else {
+                    return nil
+                }
+
+                return ExpenseBalance(
+                    participantName: participant,
+                    currency: currency,
+                    paid: draft.paid,
+                    share: draft.share,
+                    balance: balance
+                )
+            }
+        }
+
+        let settlements = ExpenseCurrency.allCases.flatMap { currency in
+            settlementsForCurrency(
+                currency,
+                balances: participants.compactMap { participant in
+                    guard let draft = balancesByCurrency[currency]?[participant] else {
+                        return nil
+                    }
+
+                    return (participant, draft.paid - draft.share)
+                }
+            )
+        }
+
+        return ExpenseSplitSummary(
+            balances: balances,
+            settlements: settlements,
+            ignoredExpenseCount: ignoredExpenseCount
+        )
+    }
+
+    func addExpense(
+        title: String,
+        amount: Double,
+        currency: ExpenseCurrency,
+        tripID: UUID,
+        participantName: String,
+        involvedParticipantNames: [String]?
+    ) {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanParticipant = participantName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanParticipant = participantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanParticipant.isEmpty else {
+            return
+        }
+
+        let cleanInvolvedParticipants = involvedParticipantNames?
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         expenses.insert(
             ExpenseItem(
                 tripID: tripID,
-                participantName: cleanParticipant?.isEmpty == false ? cleanParticipant : nil,
+                participantName: cleanParticipant,
+                involvedParticipantNames: cleanInvolvedParticipants?.isEmpty == false ? cleanInvolvedParticipants : nil,
                 title: cleanTitle.isEmpty ? "Трата" : cleanTitle,
                 amount: amount,
                 currency: currency
@@ -1232,6 +1392,51 @@ final class ExpenseStore: ObservableObject {
         UserDefaults.standard.set(data, forKey: ratesKey)
         UserDefaults.standard.set(ratesDate, forKey: ratesDateKey)
     }
+
+    private func settlementsForCurrency(_ currency: ExpenseCurrency, balances: [(name: String, balance: Double)]) -> [ExpenseSettlement] {
+        var debtors = balances
+            .filter { $0.balance < -0.005 }
+            .map { (name: $0.name, amount: -$0.balance) }
+            .sorted { $0.amount > $1.amount }
+        var creditors = balances
+            .filter { $0.balance > 0.005 }
+            .map { (name: $0.name, amount: $0.balance) }
+            .sorted { $0.amount > $1.amount }
+        var settlements: [ExpenseSettlement] = []
+        var debtorIndex = 0
+        var creditorIndex = 0
+
+        while debtorIndex < debtors.count && creditorIndex < creditors.count {
+            let amount = min(debtors[debtorIndex].amount, creditors[creditorIndex].amount)
+            if amount >= 0.005 {
+                settlements.append(
+                    ExpenseSettlement(
+                        from: debtors[debtorIndex].name,
+                        to: creditors[creditorIndex].name,
+                        amount: amount,
+                        currency: currency
+                    )
+                )
+            }
+
+            debtors[debtorIndex].amount -= amount
+            creditors[creditorIndex].amount -= amount
+
+            if debtors[debtorIndex].amount < 0.005 {
+                debtorIndex += 1
+            }
+            if creditors[creditorIndex].amount < 0.005 {
+                creditorIndex += 1
+            }
+        }
+
+        return settlements
+    }
+}
+
+private struct ExpenseBalanceDraft {
+    var paid: Double
+    var share: Double
 }
 
 private struct ParsedCBRRates {
