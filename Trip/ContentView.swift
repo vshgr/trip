@@ -1103,7 +1103,6 @@ private struct PlanItemEditorView: View {
     @State private var startTime: Date
     @State private var endDate: String
     @State private var endTime: Date
-    @State private var hasExactTime: Bool
     @State private var needsTicket: Bool
     @State private var ticketBought: Bool
     @State private var text: String
@@ -1118,7 +1117,6 @@ private struct PlanItemEditorView: View {
         _startTime = State(initialValue: Self.timeDate(from: request.item?.startTime) ?? Self.timeDate(hour: 9, minute: 0))
         _endDate = State(initialValue: request.item?.endDate ?? request.item?.startDate ?? request.defaultDate)
         _endTime = State(initialValue: Self.timeDate(from: request.item?.endTime) ?? Self.timeDate(hour: 10, minute: 0))
-        _hasExactTime = State(initialValue: request.item?.hasExactTime ?? true)
         _needsTicket = State(initialValue: request.item?.needsTicket ?? false)
         _ticketBought = State(initialValue: request.item?.ticketBought ?? false)
         _text = State(initialValue: request.item?.title ?? "")
@@ -1158,10 +1156,6 @@ private struct PlanItemEditorView: View {
                                 .foregroundStyle(AppColors.ink)
 
                             Spacer()
-
-                            Toggle("Точное время", isOn: $hasExactTime)
-                                .labelsHidden()
-                                .tint(AppColors.accent)
                         }
 
                         VStack(spacing: 10) {
@@ -1169,16 +1163,14 @@ private struct PlanItemEditorView: View {
                                 title: "Начало",
                                 dateSelection: $startDate,
                                 timeSelection: $startTime,
-                                dates: request.dates,
-                                isTimeEnabled: hasExactTime
+                                dates: request.dates
                             )
 
                             ScheduleEndpointCard(
                                 title: "Конец",
                                 dateSelection: $endDate,
                                 timeSelection: $endTime,
-                                dates: request.dates,
-                                isTimeEnabled: hasExactTime
+                                dates: request.dates
                             )
                         }
 
@@ -1210,6 +1202,16 @@ private struct PlanItemEditorView: View {
                             .overlay {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                            }
+                            .overlay(alignment: .topLeading) {
+                                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Например: Саграда Фамилия, ужин, перелет...")
+                                        .font(.subheadline)
+                                        .foregroundStyle(AppColors.faint)
+                                        .padding(.horizontal, 15)
+                                        .padding(.vertical, 18)
+                                        .allowsHitTesting(false)
+                                }
                             }
                     }
 
@@ -1280,9 +1282,6 @@ private struct PlanItemEditorView: View {
         .onChange(of: endTime) { _, _ in
             validateTimes()
         }
-        .onChange(of: hasExactTime) { _, _ in
-            validateTimes()
-        }
         .preferredColorScheme(.light)
     }
 
@@ -1291,10 +1290,6 @@ private struct PlanItemEditorView: View {
     }
 
     private var currentTimeValidationMessage: String? {
-        guard hasExactTime else {
-            return nil
-        }
-
         let start = dateIndex(for: startDate) * TimelineLayout.minutesPerDay + minutes(from: startTime)
         let end = dateIndex(for: endDate) * TimelineLayout.minutesPerDay + minutes(from: endTime)
 
@@ -1316,8 +1311,8 @@ private struct PlanItemEditorView: View {
             return nil
         }
 
-        let normalizedStartTime = hasExactTime ? timeString(from: startTime) : ""
-        let normalizedEndTime = hasExactTime ? timeString(from: endTime) : ""
+        let normalizedStartTime = timeString(from: startTime)
+        let normalizedEndTime = timeString(from: endTime)
 
         return PlanItemDraft(
             title: text,
@@ -1441,7 +1436,6 @@ private struct ScheduleEndpointCard: View {
     @Binding var dateSelection: String
     @Binding var timeSelection: Date
     let dates: [String]
-    let isTimeEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1452,7 +1446,7 @@ private struct ScheduleEndpointCard: View {
 
             HStack(spacing: 8) {
                 DateField(selection: $dateSelection, dates: dates)
-                TimePickerField(selection: $timeSelection, isEnabled: isTimeEnabled)
+                TimePickerField(selection: $timeSelection)
             }
         }
         .padding(10)
@@ -1462,7 +1456,6 @@ private struct ScheduleEndpointCard: View {
 
 private struct TimePickerField: View {
     @Binding var selection: Date
-    let isEnabled: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -1474,10 +1467,8 @@ private struct TimePickerField: View {
             DatePicker("Время", selection: $selection, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.compact)
-                .disabled(!isEnabled)
                 .tint(AppColors.accent)
         }
-        .opacity(isEnabled ? 1 : 0.42)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
