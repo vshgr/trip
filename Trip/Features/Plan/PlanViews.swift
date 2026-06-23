@@ -567,9 +567,6 @@ struct TimelineView: View {
                 store: store,
                 onEdit: { item in
                     editorRequest = PlanEditorRequest(dayID: day.id, item: item, defaultCity: day.city, defaultDate: day.date, cities: cities, dates: store.days.map(\.date))
-                },
-                onDelete: { item in
-                    store.deleteItem(dayID: day.id, itemID: item.id)
                 }
             )
         }
@@ -580,29 +577,50 @@ struct TimelineView: View {
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
         .sheet(item: $editorRequest) { request in
-            PlanItemEditorView(request: request) { draft in
-                if let item = request.item {
-                    store.updateItem(dayID: request.dayID, itemID: item.id, draft: draft)
-                } else {
-                    store.addItem(dayID: request.dayID, draft: draft)
+            PlanItemEditorView(
+                request: request,
+                onSave: { draft in
+                    if let item = request.item {
+                        store.updateItem(dayID: request.dayID, itemID: item.id, draft: draft)
+                    } else {
+                        store.addItem(dayID: request.dayID, draft: draft)
+                    }
+                },
+                onDelete: request.item.map { item in
+                    {
+                        store.deleteItem(dayID: request.dayID, itemID: item.id)
+                    }
                 }
-            }
+            )
         }
     }
 
+}
+
+private struct TimelineEventPlacement: Identifiable {
+    let item: PlanItem
+    let column: Int
+    let columnCount: Int
+    let top: CGFloat
+    let height: CGFloat
+
+    var id: UUID {
+        item.id
+    }
 }
 
 struct DayTimelineGrid: View {
     private let hourHeight: CGFloat = 64
     private let topInset: CGFloat = 6
     private let cardGap: CGFloat = 4
+    private let columnGap: CGFloat = 4
+    private let eventLeading: CGFloat = 48
     private let timelineHours = Array(0...23)
 
     let day: TripDay
     let items: [PlanItem]
     @ObservedObject var store: TripStore
     let onEdit: (PlanItem) -> Void
-    let onDelete: (PlanItem) -> Void
 
     var body: some View {
         VStack(spacing: 14) {
@@ -614,23 +632,93 @@ struct DayTimelineGrid: View {
                     }
                 }
 
-                ForEach(scheduledItems) { item in
-                    TimelinePlanCard(
-                        item: item,
-                        mode: .hour,
-                        height: cardHeight(for: item),
-                        onEdit: { onEdit(item) },
-                        onDelete: { onDelete(item) }
-                    )
-                    .padding(.leading, 82)
-                    .offset(y: topOffset(for: item))
-                    .zIndex(1)
+                GeometryReader { geometry in
+                    let availableWidth = max(0, geometry.size.width - eventLeading)
+
+                    ForEach(eventPlacements) { placement in
+                        let totalGaps = CGFloat(placement.columnCount - 1) * columnGap
+                        let cardWidth = max(0, (availableWidth - totalGaps) / CGFloat(placement.columnCount))
+                        let horizontalOffset = eventLeading + CGFloat(placement.column) * (cardWidth + columnGap)
+
+                        TimelinePlanCard(
+                            item: placement.item,
+                            mode: .hour,
+                            height: placement.height,
+                            onEdit: { onEdit(placement.item) }
+                        )
+                        .frame(width: cardWidth)
+                        .offset(x: horizontalOffset, y: placement.top)
+                        .zIndex(1)
+                    }
                 }
             }
             .padding(.top, topInset)
             .frame(height: topInset + totalTimelineHeight, alignment: .top)
             .clipped()
         }
+    }
+
+    private var eventPlacements: [TimelineEventPlacement] {
+        let intervals = scheduledItems.compactMap { item -> (item: PlanItem, top: CGFloat, height: CGFloat)? in
+            guard let segment = visibleSegment(for: item) else {
+                return nil
+            }
+
+            return (item, CGFloat(segment.top), max(44, CGFloat(segment.height) - cardGap))
+        }
+        .sorted {
+            if $0.top != $1.top {
+                return $0.top < $1.top
+            }
+            return $0.item.sortIndex < $1.item.sortIndex
+        }
+
+        var placements: [TimelineEventPlacement] = []
+        var cluster: [(item: PlanItem, top: CGFloat, height: CGFloat)] = []
+        var clusterEnd: CGFloat = 0
+
+        func appendCluster() {
+            guard !cluster.isEmpty else {
+                return
+            }
+
+            var columnEnds: [CGFloat] = []
+            var assignedColumns: [Int] = []
+
+            for interval in cluster {
+                let column = columnEnds.firstIndex { $0 <= interval.top } ?? columnEnds.count
+                if column == columnEnds.count {
+                    columnEnds.append(interval.top + interval.height)
+                } else {
+                    columnEnds[column] = interval.top + interval.height
+                }
+                assignedColumns.append(column)
+            }
+
+            let columnCount = columnEnds.count
+            placements.append(contentsOf: zip(cluster, assignedColumns).map { interval, column in
+                TimelineEventPlacement(
+                    item: interval.item,
+                    column: column,
+                    columnCount: columnCount,
+                    top: interval.top,
+                    height: interval.height
+                )
+            })
+        }
+
+        for interval in intervals {
+            if !cluster.isEmpty, interval.top >= clusterEnd {
+                appendCluster()
+                cluster = []
+            }
+
+            cluster.append(interval)
+            clusterEnd = max(clusterEnd, interval.top + interval.height)
+        }
+        appendCluster()
+
+        return placements
     }
 
     private var scheduledItems: [PlanItem] {
@@ -645,18 +733,6 @@ struct DayTimelineGrid: View {
 
     private var totalTimelineHeight: CGFloat {
         baseTimelineHeight
-    }
-
-    private func topOffset(for item: PlanItem) -> CGFloat {
-        CGFloat(visibleSegment(for: item)?.top ?? 0)
-    }
-
-    private func cardHeight(for item: PlanItem) -> CGFloat {
-        guard let segment = visibleSegment(for: item) else {
-            return hourHeight
-        }
-
-        return max(44, CGFloat(segment.height) - cardGap)
     }
 
     private func visibleSegment(for item: PlanItem) -> TimelineSegment? {
@@ -676,11 +752,11 @@ struct HourTimelineRow: View {
     @ObservedObject var store: TripStore
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 4) {
             Text(String(format: "%02d:00", hour))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppColors.muted)
-                .frame(width: 58, alignment: .trailing)
+                .frame(width: 38, alignment: .trailing)
                 .padding(.top, 4)
 
             VStack(spacing: 0) {
@@ -728,91 +804,57 @@ struct TimelinePlanCard: View {
     let mode: TimelineCardMode
     var height: CGFloat? = nil
     let onEdit: () -> Void
-    let onDelete: () -> Void
-    @State private var horizontalOffset: CGFloat = 0
-
-    private let deleteRevealWidth: CGFloat = 62
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: deleteRevealWidth)
-                    .frame(maxHeight: .infinity)
-                    .background(AppColors.danger)
-            }
-            .accessibilityLabel("Удалить")
+        HStack(alignment: .top, spacing: 8) {
+            Capsule()
+                .fill(CityColors.color(for: item.city))
+                .frame(width: 4)
 
-            HStack(alignment: .top, spacing: 10) {
-                Capsule()
-                    .fill(CityColors.color(for: item.city))
-                    .frame(width: 4)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Image(systemName: item.category.systemImage)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppColors.accent)
+                        .frame(width: 14)
+                        .accessibilityLabel(item.category.title)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Image(systemName: item.category.systemImage)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.accent)
-                            .frame(width: 16)
-                            .accessibilityLabel(item.category.title)
+                    Text(item.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineSpacing(2)
+                        .foregroundStyle(AppColors.ink)
+                        .lineLimit(3)
+                        .minimumScaleFactor(1)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                        Text(item.title)
-                            .font(.subheadline.weight(.semibold))
-                            .lineSpacing(2)
-                            .foregroundStyle(AppColors.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        TicketStatusIcon(item: item)
-                    }
-
-                    if item.hasExactTime || !item.startDate.isEmpty || !item.endDate.isEmpty {
-                        Text(item.timeLabel)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.accent)
-                    }
+                    TicketStatusIcon(item: item)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: height, alignment: .leading)
-            .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .onTapGesture {
-                onEdit()
-            }
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Открыть редактирование")
-            .offset(x: horizontalOffset)
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 14)
-                    .onChanged { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) * 1.4 else {
-                            return
-                        }
 
-                        let proposedOffset = min(0, value.translation.width)
-                        horizontalOffset = max(-deleteRevealWidth, proposedOffset)
-                    }
-                    .onEnded { value in
-                        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
-                            let isHorizontalSwipe = abs(value.translation.width) > abs(value.translation.height) * 1.4
-                            horizontalOffset = isHorizontalSwipe && value.translation.width < -32 ? -deleteRevealWidth : 0
-                        }
-                    }
-            )
+                if item.hasExactTime || !item.startDate.isEmpty || !item.endDate.isEmpty {
+                    Text(item.timeLabel)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppColors.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: height, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture {
+            onEdit()
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Открыть редактирование")
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.black.opacity(0.05), lineWidth: 1)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -842,6 +884,7 @@ struct PlanEditorRequest: Identifiable {
 struct PlanItemEditorView: View {
     let request: PlanEditorRequest
     let onSave: (PlanItemDraft) -> Void
+    let onDelete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedCity: String
@@ -854,10 +897,16 @@ struct PlanItemEditorView: View {
     @State private var ticketBought: Bool
     @State private var text: String
     @State private var timeValidationMessage: String?
+    @State private var isShowingDeleteConfirmation = false
 
-    init(request: PlanEditorRequest, onSave: @escaping (PlanItemDraft) -> Void) {
+    init(
+        request: PlanEditorRequest,
+        onSave: @escaping (PlanItemDraft) -> Void,
+        onDelete: (() -> Void)? = nil
+    ) {
         self.request = request
         self.onSave = onSave
+        self.onDelete = onDelete
         _selectedCity = State(initialValue: request.item?.city ?? request.defaultCity)
         _selectedCategory = State(initialValue: request.item?.category ?? .walk)
         _startDate = State(initialValue: request.item?.startDate ?? request.defaultDate)
@@ -906,7 +955,8 @@ struct PlanItemEditorView: View {
                                 title: "Конец",
                                 dateSelection: $endDate,
                                 timeSelection: $endTime,
-                                dates: request.dates
+                                dates: request.dates,
+                                minimumTime: startDate == endDate ? minimumEndTime : nil
                             )
                         }
                     }
@@ -945,6 +995,20 @@ struct PlanItemEditorView: View {
                     }
                     .animation(.easeInOut(duration: 0.18), value: needsTicket)
 
+                    if onDelete != nil {
+                        Button(role: .destructive) {
+                            isShowingDeleteConfirmation = true
+                        } label: {
+                            Label("Удалить событие", systemImage: "trash")
+                                .font(.body.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppColors.danger)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+
                     Spacer(minLength: 8)
                 }
                 .padding(.horizontal, 16)
@@ -979,13 +1043,28 @@ struct PlanItemEditorView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "Удалить событие?",
+            isPresented: $isShowingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Удалить", role: .destructive) {
+                onDelete?()
+                dismiss()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Это действие нельзя отменить.")
+        }
         .onChange(of: startDate) { _, _ in
+            adjustEndAfterStartChange()
             validateTimes()
         }
         .onChange(of: endDate) { _, _ in
             validateTimes()
         }
         .onChange(of: startTime) { _, _ in
+            adjustEndAfterStartChange()
             validateTimes()
         }
         .onChange(of: endTime) { _, _ in
@@ -1010,8 +1089,39 @@ struct PlanItemEditorView: View {
         return start < end ? nil : "Начало должно быть раньше конца"
     }
 
+    private var minimumEndTime: Date {
+        Calendar.current.date(byAdding: .minute, value: 1, to: startTime) ?? startTime
+    }
+
     private func dateIndex(for date: String) -> Int {
         request.dates.firstIndex(of: date) ?? 0
+    }
+
+    private func adjustEndAfterStartChange() {
+        let startIndex = dateIndex(for: startDate)
+        let endIndex = dateIndex(for: endDate)
+
+        if endIndex < startIndex {
+            endDate = startDate
+        }
+
+        guard dateIndex(for: endDate) == startIndex, endTime <= startTime else {
+            return
+        }
+
+        if let adjustedEnd = Calendar.current.date(byAdding: .hour, value: 1, to: startTime),
+           Calendar.current.isDate(adjustedEnd, inSameDayAs: startTime) {
+            endTime = adjustedEnd
+            return
+        }
+
+        guard request.dates.indices.contains(startIndex + 1) else {
+            endTime = minimumEndTime
+            return
+        }
+
+        endDate = request.dates[startIndex + 1]
+        endTime = Calendar.current.startOfDay(for: startTime)
     }
 
     private func validateTimes() {
@@ -1171,6 +1281,7 @@ struct ScheduleEndpointRow: View {
     @Binding var dateSelection: String
     @Binding var timeSelection: Date
     let dates: [String]
+    var minimumTime: Date? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1183,7 +1294,7 @@ struct ScheduleEndpointRow: View {
 
             Spacer(minLength: 8)
 
-            TimePickerField(selection: $timeSelection)
+            TimePickerField(selection: $timeSelection, minimumTime: minimumTime)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -1193,15 +1304,37 @@ struct ScheduleEndpointRow: View {
 
 struct TimePickerField: View {
     @Binding var selection: Date
+    var minimumTime: Date? = nil
 
     var body: some View {
         HStack {
-            DatePicker("Время", selection: $selection, displayedComponents: .hourAndMinute)
+            if let minimumTime {
+                DatePicker(
+                    "Время",
+                    selection: $selection,
+                    in: minimumTime...Self.endOfDay(for: minimumTime),
+                    displayedComponents: .hourAndMinute
+                )
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .tint(AppColors.accent)
+            } else {
+                DatePicker("Время", selection: $selection, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .tint(AppColors.accent)
+            }
         }
         .frame(minHeight: 34, alignment: .trailing)
+    }
+
+    private static func endOfDay(for date: Date) -> Date {
+        Calendar.current.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: date
+        ) ?? date
     }
 }
 
