@@ -18,10 +18,6 @@ struct PlanTabView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if trip.id == TripCatalogStore.defaultTripID {
-                        EuropeTripStatusWidget(days: store.days)
-                    }
-
                     MonthCalendarView(days: store.days, store: store, selectedDayID: $selectedDayID)
                     TimelineView(day: selectedDay, store: store, cities: planCities)
                 }
@@ -634,14 +630,6 @@ struct DayTimelineGrid: View {
             .padding(.top, topInset)
             .frame(height: topInset + totalTimelineHeight, alignment: .top)
             .clipped()
-
-            UnscheduledTimelineSection(
-                items: items.filter { !$0.hasSchedule },
-                dayID: day.id,
-                store: store,
-                onEdit: onEdit,
-                onDelete: onDelete
-            )
         }
     }
 
@@ -837,61 +825,6 @@ struct TicketStatusIcon: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(item.ticketBought ? AppColors.success : AppColors.danger)
                 .accessibilityLabel(item.ticketBought ? "Билет куплен" : "Билет не куплен")
-        }
-    }
-}
-
-struct UnscheduledTimelineSection: View {
-    let items: [PlanItem]
-    let dayID: Int
-    @ObservedObject var store: TripStore
-    let onEdit: (PlanItem) -> Void
-    let onDelete: (PlanItem) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Text("Без времени")
-                    .font(.caption.weight(.heavy))
-                    .foregroundStyle(AppColors.muted)
-                    .frame(width: 58, alignment: .trailing)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.72)
-
-                Circle()
-                    .fill(AppColors.faint)
-                    .frame(width: 8, height: 8)
-
-                Text("сюда попадают пункты без периода и часов")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(AppColors.faint)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                if items.isEmpty {
-                    Text("Пока пусто")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.faint)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppColors.placeholder, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                } else {
-                    ForEach(items) { item in
-                        TimelinePlanCard(item: item, mode: .unscheduled, onEdit: { onEdit(item) }, onDelete: { onDelete(item) })
-                    }
-                }
-            }
-            .padding(.leading, 82)
-        }
-        .padding(.top, 10)
-        .dropDestination(for: String.self) { values, _ in
-            guard let itemID = values.compactMap({ UUID(uuidString: $0) }).first else {
-                return false
-            }
-
-            store.scheduleItem(dayID: dayID, itemID: itemID, hour: nil)
-            return true
         }
     }
 }
