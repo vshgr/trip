@@ -17,3 +17,4 @@ The iOS app currently uses `Double`, but backend balance and split calculations 
 - Use `amount_minor BIGINT`.
 - Use deterministic remainder allocation for equal splits.
 - Keep balances separate per currency.
+- Support the current iOS currency set first: RUB, EUR, USD, KZT, JPY.

@@ -63,7 +63,7 @@ This document captures the existing iOS application state before adding a backen
 
 `ExpenseCurrency`
 
-- Cases: `EUR`, `USD`, `RUB`, `GBP`, `TRY`
+- Cases: `EUR`, `USD`, `RUB`, `KZT`, `JPY`
 
 `ExpenseItem`
 
@@ -100,6 +100,7 @@ This document captures the existing iOS application state before adding a backen
 - Cities are unique by exact string in the trip editor.
 - Participants are unique by exact string in the trip editor after trimming.
 - The default Europe Trip has stable ID `7A835DF2-A238-4C4B-9F36-5DA11A42B40E`.
+- The default Europe Trip currently seeds participants: `Алиса`, `Яна`, `Уля`, `Маша`.
 - User-created trip days are generated from `startDate...endDate`, capped at 370 days.
 - If a trip has multiple cities, generated days distribute cities across the date range by index ratio.
 
@@ -137,6 +138,7 @@ This document captures the existing iOS application state before adding a backen
 - The set of involved participants must be non-empty.
 - If a title is empty, `ExpenseStore` stores `Трата`.
 - Existing participants are plain strings, not users.
+- The current app seeds demo expenses for the default trip when `trip.expenses.v2` is absent or empty.
 - Expenses are filtered by `tripID`. Legacy expenses with `tripID == nil` belong to the default Europe Trip.
 - Totals are calculated per currency.
 - Approximate RUB total uses cached CBR rates and returns unavailable if a rate is missing.
@@ -160,7 +162,7 @@ This document captures the existing iOS application state before adding a backen
 - Trips: `trip.catalog.v1`
 - Trip days per active trip: `trip.days.editable.v5.<trip_uuid>`
 - Legacy default-trip days: `trip.days.editable.v4`
-- Expenses: `trip.expenses.v1`
+- Expenses: `trip.expenses.v2`
 - Exchange rates: `trip.expense.rates.v1`
 - Exchange-rate date: `trip.expense.rates.date.v1`
 
@@ -329,6 +331,7 @@ erDiagram
 - Expense amounts are `Double`; converting to minor units requires currency-specific rounding rules.
 - Existing participants are plain names; duplicate names with whitespace/case differences can create ambiguous parties.
 - Legacy expenses with `tripID == nil` implicitly belong to Europe Trip.
+- Older `trip.expenses.v1` data is not read by the current `ExpenseStore`; import tooling should explicitly decide whether to support that legacy key.
 - Client occupancy may change if backend unions overlapping intervals instead of double-counting them.
 - Widget currently expects `[TripDay]`, not a widget API DTO.
 - CBR rates are cached client-side as `Double`; server-side currency support should not depend on this cache.

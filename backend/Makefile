@@ -1,10 +1,22 @@
-.PHONY: test run docker-up
+GO ?= $(shell if command -v go >/dev/null 2>&1; then command -v go; elif [ -x /usr/local/go/bin/go ]; then echo /usr/local/go/bin/go; elif [ -x ../.tools/go/bin/go ]; then echo ../.tools/go/bin/go; else echo go; fi)
+export GOCACHE ?= $(abspath ../.cache/go-build)
+export GOPATH ?= $(abspath ../.cache/gopath)
+export DATABASE_URL ?= postgres://trip:trip@localhost:5432/trip?sslmode=disable
+
+.PHONY: test run docker-up env
 
 test:
-	go test ./...
+	$(GO) test ./...
 
 run:
-	go run ./cmd/api
+	$(GO) run ./cmd/api
 
 docker-up:
 	docker compose up --build
+
+env:
+	@echo "GO=$(GO)"
+	@$(GO) version
+	@echo "GOCACHE=$(GOCACHE)"
+	@echo "GOPATH=$(GOPATH)"
+	@echo "DATABASE_URL=$(DATABASE_URL)"

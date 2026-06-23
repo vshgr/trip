@@ -10,19 +10,51 @@ Go backend for the Trip iOS app. The backend is being added as a modular monolit
 - Persistence will use PostgreSQL migrations and sqlc-generated query code in later stages.
 - API responses use `{ "data": ... }` and `{ "error": ... }` envelopes.
 
-Stage 1 intentionally keeps runtime dependencies minimal because this local workspace has no Go toolchain installed. The CI/Docker image uses Go and will be the source of truth for compilation until a local Go installation is available.
+Stage 1 intentionally keeps runtime dependencies minimal. Use the system Go toolchain installed from `go.dev`.
+
+## Local Go Setup
+
+Install Go for macOS Apple Silicon from `https://go.dev/dl/`, then check:
+
+```bash
+go version
+```
+
+If `go` is installed but not found, add it to your zsh path:
+
+```bash
+echo 'export PATH="/usr/local/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+go version
+```
 
 ## Run
 
 ```bash
 cd backend
-docker compose up --build
+make test
+make run
 ```
 
 API:
 
 - `GET http://localhost:8080/health/live`
 - `GET http://localhost:8080/health/ready`
+
+Without PostgreSQL, `/health/live` is enough to verify that the HTTP API starts. `/health/ready` expects `DATABASE_URL`; Stage 1 only checks that it is configured, and the pgx-backed ping is added with repository integration.
+
+You can also run from the repository root:
+
+```bash
+scripts/backend-run-local.sh
+```
+
+With Docker Desktop installed:
+
+```bash
+cd backend
+docker compose up --build
+```
 
 ## Environment
 
@@ -49,7 +81,7 @@ Stage 1 defines the initial schema. A migration runner will be wired in the next
 
 ```bash
 cd backend
-go test ./...
+make test
 ```
 
 Current unit tests cover:
@@ -57,6 +89,7 @@ Current unit tests cover:
 - health router behavior;
 - schedule occupancy interval union/clipping;
 - integer equal-split remainder distribution.
+- supported currencies matching the current iOS app: RUB, EUR, USD, KZT, JPY.
 
 ## Endpoints
 
@@ -70,4 +103,4 @@ Planned API resources are defined in `api/openapi.yaml`.
 ## Troubleshooting
 
 - If `/health/ready` returns 503, check `DATABASE_URL`.
-- If local `go` is missing, install Go 1.23+ or run through Docker/CI.
+- If local `go` is missing, install Go from `go.dev/dl` or add `/usr/local/go/bin` to `PATH`.

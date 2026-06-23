@@ -139,7 +139,8 @@ CREATE TABLE expenses (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TIMESTAMPTZ NULL,
-    CONSTRAINT expenses_amount_positive_check CHECK (amount_minor > 0)
+    CONSTRAINT expenses_amount_positive_check CHECK (amount_minor > 0),
+    CONSTRAINT expenses_currency_check CHECK (currency_code IN ('RUB', 'EUR', 'USD', 'KZT', 'JPY'))
 );
 
 CREATE TABLE expense_shares (
@@ -169,5 +170,6 @@ CREATE TABLE receipt_items (
     amount_minor BIGINT NULL,
     currency_code CHAR(3) NULL,
     assigned_party_id UUID NULL REFERENCES trip_parties(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT receipt_items_currency_check CHECK (currency_code IS NULL OR currency_code IN ('RUB', 'EUR', 'USD', 'KZT', 'JPY'))
 );

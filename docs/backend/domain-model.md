@@ -26,6 +26,7 @@
 - Exact schedule requires `start_at` and `timezone`; `end_at`, when present, must be after `start_at`.
 - If `needs_ticket = false`, `ticket_bought` must be false.
 - Money is stored as integer minor units and ISO currency code.
+- Supported MVP currencies follow the current iOS app: RUB, EUR, USD, KZT, JPY.
 - Expense shares must sum to expense amount in application logic.
 - Balances and simplified transfers are calculated separately per currency.
 

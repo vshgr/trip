@@ -5,7 +5,7 @@
 - `trip.catalog.v1`
 - `trip.days.editable.v5.<trip_uuid>`
 - `trip.days.editable.v4`
-- `trip.expenses.v1`
+- `trip.expenses.v2`
 - `trip.expense.rates.v1`
 - `trip.expense.rates.date.v1`
 - App Group `trip.days.shared.europe`
@@ -23,6 +23,8 @@
 ## Guest Participants
 
 Local participants are strings. Import them as `trip_parties`, not fake users.
+
+The current default trip seeds `Алиса`, `Яна`, `Уля`, and `Маша` as guest parties. Demo expenses should be treated as local data unless the client marks them differently in a future migration flag.
 
 ## Rollback
 
