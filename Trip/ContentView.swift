@@ -147,6 +147,14 @@ private struct TripWorkspaceHeader: View {
                     .foregroundStyle(AppColors.ink)
                     .lineLimit(2)
 
+                if !trip.participants.isEmpty {
+                    Text(trip.participants.joined(separator: ", "))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.accent)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Text(tripDateRangeString(start: trip.startDate, end: trip.endDate))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppColors.muted)
@@ -199,10 +207,6 @@ private struct PlanTabView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if trip.id == TripCatalogStore.defaultTripID {
-                        EuropeTripStatusWidget(days: store.days)
-                    }
-
                     MonthCalendarView(days: store.days, store: store, selectedDayID: $selectedDayID)
                     TimelineView(day: selectedDay, store: store, cities: planCities)
                 }
@@ -815,14 +819,6 @@ private struct DayTimelineGrid: View {
             .padding(.top, topInset)
             .frame(height: topInset + totalTimelineHeight, alignment: .top)
             .clipped()
-
-            UnscheduledTimelineSection(
-                items: items.filter { !$0.hasSchedule },
-                dayID: day.id,
-                store: store,
-                onEdit: onEdit,
-                onDelete: onDelete
-            )
         }
     }
 
@@ -1136,14 +1132,7 @@ private struct PlanItemEditorView: View {
                             }
                         }
 
-                        CompactPlanPicker(title: "Тип") {
-                            Picker("Тип", selection: $selectedCategory) {
-                                ForEach(PlanCategory.allCases) { category in
-                                    Label(category.title, systemImage: category.systemImage)
-                                        .tag(category)
-                                }
-                            }
-                        }
+                        CategoryMenuField(selection: $selectedCategory)
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
@@ -1356,6 +1345,62 @@ private struct PlanItemEditorView: View {
         components.hour = hour
         components.minute = minute
         return components.date ?? Date()
+    }
+}
+
+private struct CategoryMenuField: View {
+    @Binding var selection: PlanCategory
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Тип")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppColors.muted)
+
+            Menu {
+                Picker("Тип", selection: $selection) {
+                    ForEach(PlanCategory.allCases) { category in
+                        Label(category.title, systemImage: category.systemImage)
+                            .tag(category)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: selection.systemImage)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppColors.accent)
+                        .frame(width: 20)
+
+                    Text(compactTitle(for: selection))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(AppColors.muted)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func compactTitle(for category: PlanCategory) -> String {
+        switch category {
+        case .sight:
+            return "Место"
+        case .transfer:
+            return "Трансфер"
+        default:
+            return category.title
+        }
     }
 }
 
