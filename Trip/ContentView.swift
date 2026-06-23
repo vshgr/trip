@@ -1129,23 +1129,26 @@ private struct PlanItemEditorView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        CompactPlanPicker(title: "Город") {
-                            Picker("Город", selection: $selectedCity) {
-                                ForEach(request.cities, id: \.self) { city in
-                                    Text(city).tag(city)
-                                }
+                    CompactPlanPicker(title: "Город") {
+                        Picker("Город", selection: $selectedCity) {
+                            ForEach(request.cities, id: \.self) { city in
+                                Text(city).tag(city)
                             }
                         }
+                    }
 
-                        CompactPlanPicker(title: "Тип") {
-                            Picker("Тип", selection: $selectedCategory) {
-                                ForEach(PlanCategory.allCases) { category in
-                                    Label(category.title, systemImage: category.systemImage)
-                                        .tag(category)
-                                }
-                            }
-                        }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Тип")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(AppColors.ink)
+
+                        PlanCategorySelector(selection: $selectedCategory)
+                    }
+                    .padding(12)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -1161,16 +1164,22 @@ private struct PlanItemEditorView: View {
                                 .tint(AppColors.accent)
                         }
 
-                        VStack(spacing: 8) {
-                            HStack(spacing: 8) {
-                                DateField(title: "Старт", selection: $startDate, dates: request.dates)
-                                TimePickerField(title: "Время", selection: $startTime, isEnabled: hasExactTime)
-                            }
+                        VStack(spacing: 10) {
+                            ScheduleEndpointCard(
+                                title: "Начало",
+                                dateSelection: $startDate,
+                                timeSelection: $startTime,
+                                dates: request.dates,
+                                isTimeEnabled: hasExactTime
+                            )
 
-                            HStack(spacing: 8) {
-                                DateField(title: "Конец", selection: $endDate, dates: request.dates)
-                                TimePickerField(title: "Время", selection: $endTime, isEnabled: hasExactTime)
-                            }
+                            ScheduleEndpointCard(
+                                title: "Конец",
+                                dateSelection: $endDate,
+                                timeSelection: $endTime,
+                                dates: request.dates,
+                                isTimeEnabled: hasExactTime
+                            )
                         }
 
                         if let timeValidationMessage {
@@ -1356,6 +1365,55 @@ private struct PlanItemEditorView: View {
     }
 }
 
+private struct PlanCategorySelector: View {
+    @Binding var selection: PlanCategory
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(PlanCategory.allCases) { category in
+                Button {
+                    selection = category
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: category.systemImage)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(selection == category ? Color.white : AppColors.accent)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                selection == category ? AppColors.accent : AppColors.accentSoft,
+                                in: Circle()
+                            )
+
+                        Text(category.title)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(AppColors.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .background(
+                        selection == category ? AppColors.accentSoft : AppColors.itemBackground,
+                        in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .stroke(selection == category ? AppColors.accent.opacity(0.45) : Color.black.opacity(0.06), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 private struct CompactPlanPicker<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content
@@ -1378,55 +1436,99 @@ private struct CompactPlanPicker<Content: View>: View {
     }
 }
 
-private struct TimePickerField: View {
+private struct ScheduleEndpointCard: View {
     let title: String
+    @Binding var dateSelection: String
+    @Binding var timeSelection: Date
+    let dates: [String]
+    let isTimeEnabled: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.heavy))
+                .foregroundStyle(AppColors.muted)
+                .textCase(.uppercase)
+
+            HStack(spacing: 8) {
+                DateField(selection: $dateSelection, dates: dates)
+                TimePickerField(selection: $timeSelection, isEnabled: isTimeEnabled)
+            }
+        }
+        .padding(10)
+        .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+private struct TimePickerField: View {
     @Binding var selection: Date
     let isEnabled: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
+        HStack(spacing: 8) {
+            Image(systemName: "clock")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.muted)
+                .foregroundStyle(AppColors.accent)
+                .frame(width: 20)
 
-            DatePicker(title, selection: $selection, displayedComponents: .hourAndMinute)
+            DatePicker("Время", selection: $selection, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .disabled(!isEnabled)
-                .opacity(isEnabled ? 1 : 0.45)
                 .tint(AppColors.accent)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .opacity(isEnabled ? 1 : 0.42)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
     }
 }
 
 private struct DateField: View {
-    let title: String
     @Binding var selection: String
     let dates: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.muted)
-
-            Picker(title, selection: $selection) {
+        Menu {
+            Picker("Дата", selection: $selection) {
                 ForEach(dates, id: \.self) { date in
                     Text(date).tag(date)
                 }
             }
-            .pickerStyle(.menu)
-            .tint(AppColors.accent)
-            .font(.subheadline.weight(.semibold))
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 20)
+
+                Text(selection)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppColors.muted)
+            }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            }
         }
+        .buttonStyle(.plain)
     }
 }
 
