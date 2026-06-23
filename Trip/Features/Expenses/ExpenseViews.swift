@@ -47,9 +47,7 @@ struct ExpensesView: View {
         .task {
             syncSelectedParticipant(with: trip.participants)
             syncInvolvedParticipants(with: trip.participants)
-            if store.rates[.eur] == nil || store.rates[.usd] == nil {
-                await store.refreshRates()
-            }
+            await store.refreshRatesIfNeeded()
         }
         .onChange(of: trip.participants) { _, participants in
             syncSelectedParticipant(with: participants)

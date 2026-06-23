@@ -1162,12 +1162,19 @@ final class ExpenseStore: ObservableObject {
     }
     @Published var rates: [ExpenseCurrency: Double] = [.rub: 1]
     @Published var ratesDate: String?
+    @Published var ratesUpdatedAt: Date?
     @Published var isLoadingRates = false
     @Published var ratesError: String?
 
     private let expensesKey = "trip.expenses.v2"
     private let ratesKey = "trip.expense.rates.v1"
     private let ratesDateKey = "trip.expense.rates.date.v1"
+    private let ratesUpdatedAtKey = "trip.expense.rates.updated-at.v1"
+    private let ratesRefreshInterval: TimeInterval = 6 * 60 * 60
+
+    private var hasCompleteRates: Bool {
+        ExpenseCurrency.allCases.allSatisfy { rates[$0] != nil }
+    }
 
     init() {
         if
@@ -1404,7 +1411,21 @@ final class ExpenseStore: ObservableObject {
         expenses.removeAll { $0.id == expense.id }
     }
 
+    func refreshRatesIfNeeded() async {
+        if let ratesUpdatedAt,
+           Date().timeIntervalSince(ratesUpdatedAt) < ratesRefreshInterval,
+           hasCompleteRates {
+            return
+        }
+
+        await refreshRates()
+    }
+
     func refreshRates() async {
+        guard !isLoadingRates else {
+            return
+        }
+
         isLoadingRates = true
         ratesError = nil
 
@@ -1418,10 +1439,22 @@ final class ExpenseStore: ObservableObject {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard
+                let httpResponse = response as? HTTPURLResponse,
+                (200...299).contains(httpResponse.statusCode)
+            else {
+                throw CBRRatesError.invalidResponse
+            }
+
             let parsed = try CBRRatesParser.parse(data: data)
+            guard ExpenseCurrency.allCases.allSatisfy({ parsed.rates[$0] != nil }) else {
+                throw CBRRatesError.incompleteRates
+            }
+
             rates = parsed.rates
             ratesDate = parsed.date
+            ratesUpdatedAt = Date()
             saveRates()
         } catch {
             ratesError = "Не удалось обновить курс"
@@ -1450,6 +1483,7 @@ final class ExpenseStore: ObservableObject {
         }
 
         ratesDate = UserDefaults.standard.string(forKey: ratesDateKey)
+        ratesUpdatedAt = UserDefaults.standard.object(forKey: ratesUpdatedAtKey) as? Date
     }
 
     private func saveRates() {
@@ -1459,6 +1493,7 @@ final class ExpenseStore: ObservableObject {
 
         UserDefaults.standard.set(data, forKey: ratesKey)
         UserDefaults.standard.set(ratesDate, forKey: ratesDateKey)
+        UserDefaults.standard.set(ratesUpdatedAt, forKey: ratesUpdatedAtKey)
     }
 
     private func settlementsForCurrency(_ currency: ExpenseCurrency, balances: [(name: String, balance: Double)]) -> [ExpenseSettlement] {
@@ -1510,6 +1545,11 @@ private struct ExpenseBalanceDraft {
 private struct ParsedCBRRates {
     let rates: [ExpenseCurrency: Double]
     let date: String?
+}
+
+private enum CBRRatesError: Error {
+    case invalidResponse
+    case incompleteRates
 }
 
 private final class CBRRatesParser: NSObject, XMLParserDelegate {
