@@ -965,22 +965,17 @@ private struct TimelinePlanCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    onEdit()
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.callout.weight(.heavy))
-                        .frame(width: 36, height: 36)
-                        .contentShape(Rectangle())
-                }
-                .foregroundStyle(AppColors.accent)
-                .accessibilityLabel("Изменить")
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: height, alignment: .leading)
             .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .onTapGesture {
+                onEdit()
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Открыть редактирование")
             .offset(x: horizontalOffset)
             .buttonStyle(.plain)
             .simultaneousGesture(
@@ -1122,117 +1117,84 @@ private struct PlanItemEditorView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        CompactPlanPicker(title: "Город") {
-                            Picker("Город", selection: $selectedCity) {
-                                ForEach(request.cities, id: \.self) { city in
-                                    Text(city).tag(city)
-                                }
-                            }
-                        }
+                VStack(spacing: 22) {
+                    CalendarFormSection {
+                        TextField("Например: Саграда Фамилия", text: $text, axis: .vertical)
+                            .font(.body)
+                            .foregroundStyle(AppColors.ink)
+                            .lineLimit(1...3)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                    }
+
+                    CalendarFormSection {
+                        CityMenuField(selection: $selectedCity, cities: request.cities)
+
+                        CalendarDivider()
 
                         CategoryMenuField(selection: $selectedCategory)
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text("Дата и время")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(AppColors.ink)
+                    CalendarFormSection {
+                        VStack(spacing: 0) {
+                            ScheduleEndpointRow(
+                                title: "Начало",
+                                dateSelection: $startDate,
+                                timeSelection: $startTime,
+                                dates: request.dates
+                            )
 
-                            VStack(spacing: 0) {
-                                ScheduleEndpointRow(
-                                    title: "Начало",
-                                    dateSelection: $startDate,
-                                    timeSelection: $startTime,
-                                    dates: request.dates
-                                )
+                            CalendarDivider()
 
-                                Divider()
-                                    .padding(.leading, 76)
-
-                                ScheduleEndpointRow(
-                                    title: "Конец",
-                                    dateSelection: $endDate,
-                                    timeSelection: $endTime,
-                                    dates: request.dates
-                                )
-                            }
-                            .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-
-                        if let timeValidationMessage {
-                            Text(timeValidationMessage)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AppColors.warning)
+                            ScheduleEndpointRow(
+                                title: "Конец",
+                                dateSelection: $endDate,
+                                timeSelection: $endTime,
+                                dates: request.dates
+                            )
                         }
                     }
-                    .padding(12)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
+
+                    if let timeValidationMessage {
+                        Text(timeValidationMessage)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(AppColors.warning)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Пункт плана")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
-
-                        TextEditor(text: $text)
-                            .font(.subheadline)
-                            .foregroundStyle(AppColors.ink)
-                            .scrollContentBackground(.hidden)
-                            .padding(10)
-                            .frame(minHeight: 90)
-                            .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                            }
-                            .overlay(alignment: .topLeading) {
-                                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text("Например: Саграда Фамилия, ужин, перелет...")
-                                        .font(.subheadline)
-                                        .foregroundStyle(AppColors.faint)
-                                        .padding(.horizontal, 15)
-                                        .padding(.vertical, 18)
-                                        .allowsHitTesting(false)
-                                }
-                            }
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
+                    CalendarFormSection {
                         Toggle(isOn: $needsTicket) {
                             Text("Нужен билет")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.body)
                                 .foregroundStyle(AppColors.ink)
                         }
                         .tint(AppColors.accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
 
-                        Toggle(isOn: $ticketBought) {
-                            Text("Билет куплен")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(needsTicket ? AppColors.ink : AppColors.faint)
-                        }
-                        .tint(AppColors.success)
-                        .disabled(!needsTicket)
-                        .onChange(of: needsTicket) { _, newValue in
-                            if !newValue {
-                                ticketBought = false
+                        if needsTicket {
+                            CalendarDivider()
+
+                            Toggle(isOn: $ticketBought) {
+                                Text("Билет куплен")
+                                    .font(.body)
+                                    .foregroundStyle(AppColors.ink)
                             }
+                            .tint(AppColors.success)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .animation(.easeInOut(duration: 0.18), value: needsTicket)
 
                     Spacer(minLength: 8)
                 }
-                .padding(14)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
             }
-            .background(Color.white.ignoresSafeArea())
+            .background(AppColors.placeholder.ignoresSafeArea())
             .navigationTitle(request.item == nil ? "Новый пункт" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1244,17 +1206,20 @@ private struct PlanItemEditorView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
+                    Button {
                         guard let draft = validatedDraft() else {
                             return
                         }
 
                         onSave(draft)
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.headline.weight(.bold))
                     }
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppColors.accent)
+                    .foregroundStyle(canSave ? AppColors.accent : AppColors.faint)
                     .disabled(!canSave)
+                    .accessibilityLabel("Сохранить")
                 }
             }
         }
@@ -1269,6 +1234,11 @@ private struct PlanItemEditorView: View {
         }
         .onChange(of: endTime) { _, _ in
             validateTimes()
+        }
+        .onChange(of: needsTicket) { _, newValue in
+            if !newValue {
+                ticketBought = false
+            }
         }
         .preferredColorScheme(.light)
     }
@@ -1348,81 +1318,95 @@ private struct PlanItemEditorView: View {
     }
 }
 
+private struct CalendarFormSection<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct CalendarDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 16)
+    }
+}
+
 private struct CategoryMenuField: View {
     @Binding var selection: PlanCategory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("Тип")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.muted)
-
-            Menu {
-                Picker("Тип", selection: $selection) {
-                    ForEach(PlanCategory.allCases) { category in
-                        Label(category.title, systemImage: category.systemImage)
-                            .tag(category)
-                    }
+        Menu {
+            Picker("Тип", selection: $selection) {
+                ForEach(PlanCategory.allCases) { category in
+                    Label(category.title, systemImage: category.systemImage)
+                        .tag(category)
                 }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: selection.systemImage)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(AppColors.accent)
-                        .frame(width: 20)
-
-                    Text(compactTitle(for: selection))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-
-                    Spacer(minLength: 4)
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(AppColors.muted)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .buttonStyle(.plain)
-        }
-    }
+        } label: {
+            HStack(spacing: 12) {
+                Text("Тип")
+                    .font(.body)
+                    .foregroundStyle(AppColors.ink)
 
-    private func compactTitle(for category: PlanCategory) -> String {
-        switch category {
-        case .sight:
-            return "Место"
-        case .transfer:
-            return "Трансфер"
-        default:
-            return category.title
+                Spacer(minLength: 12)
+
+                Image(systemName: selection.systemImage)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 24)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppColors.faint)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         }
+        .buttonStyle(.plain)
     }
 }
 
-private struct CompactPlanPicker<Content: View>: View {
-    let title: String
-    @ViewBuilder var content: () -> Content
+private struct CityMenuField: View {
+    @Binding var selection: String
+    let cities: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.muted)
+        Menu {
+            Picker("Город", selection: $selection) {
+                ForEach(cities, id: \.self) { city in
+                    Text(city).tag(city)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Text("Город")
+                    .font(.body)
+                    .foregroundStyle(AppColors.ink)
 
-            content()
-                .pickerStyle(.menu)
-                .tint(AppColors.accent)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Spacer(minLength: 12)
+
+                Text(selection)
+                    .font(.body)
+                    .foregroundStyle(AppColors.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppColors.faint)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1433,17 +1417,20 @@ private struct ScheduleEndpointRow: View {
     let dates: [String]
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.muted)
-                .frame(width: 56, alignment: .leading)
+                .font(.body)
+                .foregroundStyle(AppColors.ink)
+                .frame(width: 72, alignment: .leading)
 
             DateField(selection: $dateSelection, dates: dates)
+
+            Spacer(minLength: 8)
+
             TimePickerField(selection: $timeSelection)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .frame(minHeight: 48)
     }
 }
@@ -1452,25 +1439,13 @@ private struct TimePickerField: View {
     @Binding var selection: Date
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "clock")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.accent)
-                .frame(width: 20)
-
+        HStack {
             DatePicker("Время", selection: $selection, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .tint(AppColors.accent)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
+        .frame(minHeight: 34, alignment: .trailing)
     }
 }
 
@@ -1486,32 +1461,18 @@ private struct DateField: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "calendar")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(AppColors.accent)
-                    .frame(width: 20)
-
+            HStack(spacing: 5) {
                 Text(selection)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppColors.ink)
+                    .font(.body)
+                    .foregroundStyle(AppColors.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
 
-                Spacer(minLength: 4)
-
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(AppColors.muted)
+                    .foregroundStyle(AppColors.faint)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
-            }
+            .frame(minHeight: 34, alignment: .leading)
         }
         .buttonStyle(.plain)
     }
