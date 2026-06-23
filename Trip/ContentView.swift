@@ -1100,9 +1100,10 @@ private struct PlanItemEditorView: View {
     @State private var selectedCity: String
     @State private var selectedCategory: PlanCategory
     @State private var startDate: String
-    @State private var startTime: String
+    @State private var startTime: Date
     @State private var endDate: String
-    @State private var endTime: String
+    @State private var endTime: Date
+    @State private var hasExactTime: Bool
     @State private var needsTicket: Bool
     @State private var ticketBought: Bool
     @State private var text: String
@@ -1114,9 +1115,10 @@ private struct PlanItemEditorView: View {
         _selectedCity = State(initialValue: request.item?.city ?? request.defaultCity)
         _selectedCategory = State(initialValue: request.item?.category ?? .walk)
         _startDate = State(initialValue: request.item?.startDate ?? request.defaultDate)
-        _startTime = State(initialValue: request.item?.startTime ?? "")
+        _startTime = State(initialValue: Self.timeDate(from: request.item?.startTime) ?? Self.timeDate(hour: 9, minute: 0))
         _endDate = State(initialValue: request.item?.endDate ?? request.item?.startDate ?? request.defaultDate)
-        _endTime = State(initialValue: request.item?.endTime ?? "")
+        _endTime = State(initialValue: Self.timeDate(from: request.item?.endTime) ?? Self.timeDate(hour: 10, minute: 0))
+        _hasExactTime = State(initialValue: request.item?.hasExactTime ?? true)
         _needsTicket = State(initialValue: request.item?.needsTicket ?? false)
         _ticketBought = State(initialValue: request.item?.ticketBought ?? false)
         _text = State(initialValue: request.item?.title ?? "")
@@ -1147,23 +1149,27 @@ private struct PlanItemEditorView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Время")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
+                        HStack {
+                            Text("Дата и время")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(AppColors.ink)
+
+                            Spacer()
+
+                            Toggle("Точное время", isOn: $hasExactTime)
+                                .labelsHidden()
+                                .tint(AppColors.accent)
+                        }
 
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 DateField(title: "Старт", selection: $startDate, dates: request.dates)
-                                TimeField(title: "Время", text: $startTime) {
-                                    normalizeTimeField($startTime)
-                                }
+                                TimePickerField(title: "Время", selection: $startTime, isEnabled: hasExactTime)
                             }
 
                             HStack(spacing: 8) {
                                 DateField(title: "Конец", selection: $endDate, dates: request.dates)
-                                TimeField(title: "Время", text: $endTime) {
-                                    normalizeTimeField($endTime)
-                                }
+                                TimePickerField(title: "Время", selection: $endTime, isEnabled: hasExactTime)
                             }
                         }
 
@@ -1265,6 +1271,9 @@ private struct PlanItemEditorView: View {
         .onChange(of: endTime) { _, _ in
             validateTimes()
         }
+        .onChange(of: hasExactTime) { _, _ in
+            validateTimes()
+        }
         .preferredColorScheme(.light)
     }
 
@@ -1273,28 +1282,12 @@ private struct PlanItemEditorView: View {
     }
 
     private var currentTimeValidationMessage: String? {
-        let normalizedStartTime = TripStore.normalizedTimeInput(startTime)
-        let normalizedEndTime = TripStore.normalizedTimeInput(endTime)
-
-        guard normalizedStartTime != nil else {
-            return "Некорректное время начала"
-        }
-
-        guard normalizedEndTime != nil else {
-            return "Некорректное время конца"
-        }
-
-        guard
-            let normalizedStartTime,
-            let normalizedEndTime,
-            !normalizedStartTime.isEmpty,
-            !normalizedEndTime.isEmpty
-        else {
+        guard hasExactTime else {
             return nil
         }
 
-        let start = dateIndex(for: startDate) * TimelineLayout.minutesPerDay + (TripStore.minutes(from: normalizedStartTime) ?? 0)
-        let end = dateIndex(for: endDate) * TimelineLayout.minutesPerDay + (TripStore.minutes(from: normalizedEndTime) ?? 0)
+        let start = dateIndex(for: startDate) * TimelineLayout.minutesPerDay + minutes(from: startTime)
+        let end = dateIndex(for: endDate) * TimelineLayout.minutesPerDay + minutes(from: endTime)
 
         return start < end ? nil : "Начало должно быть раньше конца"
     }
@@ -1308,21 +1301,14 @@ private struct PlanItemEditorView: View {
     }
 
     private func validatedDraft() -> PlanItemDraft? {
-        guard
-            let normalizedStartTime = TripStore.normalizedTimeInput(startTime),
-            let normalizedEndTime = TripStore.normalizedTimeInput(endTime)
-        else {
-            validateTimes()
-            return nil
-        }
-
-        startTime = normalizedStartTime
-        endTime = normalizedEndTime
         validateTimes()
 
         guard currentTimeValidationMessage == nil else {
             return nil
         }
+
+        let normalizedStartTime = hasExactTime ? timeString(from: startTime) : ""
+        let normalizedEndTime = hasExactTime ? timeString(from: endTime) : ""
 
         return PlanItemDraft(
             title: text,
@@ -1337,13 +1323,36 @@ private struct PlanItemEditorView: View {
         )
     }
 
-    private func normalizeTimeField(_ binding: Binding<String>) {
-        guard let normalized = TripStore.normalizedTimeInput(binding.wrappedValue) else {
-            validateTimes()
-            return
+    private func minutes(from date: Date) -> Int {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    }
+
+    private func timeString(from date: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
+    }
+
+    private static func timeDate(from value: String?) -> Date? {
+        guard
+            let value,
+            let minutes = TripStore.minutes(from: value)
+        else {
+            return nil
         }
 
-        binding.wrappedValue = normalized
+        return timeDate(hour: minutes / 60, minute: minutes % 60)
+    }
+
+    private static func timeDate(hour: Int, minute: Int) -> Date {
+        var components = DateComponents()
+        components.calendar = Calendar.current
+        components.year = 2000
+        components.month = 1
+        components.day = 1
+        components.hour = hour
+        components.minute = minute
+        return components.date ?? Date()
     }
 }
 
@@ -1369,10 +1378,10 @@ private struct CompactPlanPicker<Content: View>: View {
     }
 }
 
-private struct TimeField: View {
+private struct TimePickerField: View {
     let title: String
-    @Binding var text: String
-    var onCommit: () -> Void = {}
+    @Binding var selection: Date
+    let isEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -1380,16 +1389,16 @@ private struct TimeField: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppColors.muted)
 
-            TextField("09:30", text: $text)
-                .keyboardType(.numbersAndPunctuation)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppColors.ink)
+            DatePicker(title, selection: $selection, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .disabled(!isEnabled)
+                .opacity(isEnabled ? 1 : 0.45)
+                .tint(AppColors.accent)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .onSubmit(onCommit)
         }
     }
 }
