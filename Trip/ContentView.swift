@@ -1127,51 +1127,50 @@ private struct PlanItemEditorView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    CompactPlanPicker(title: "Город") {
-                        Picker("Город", selection: $selectedCity) {
-                            ForEach(request.cities, id: \.self) { city in
-                                Text(city).tag(city)
+                    HStack(spacing: 8) {
+                        CompactPlanPicker(title: "Город") {
+                            Picker("Город", selection: $selectedCity) {
+                                ForEach(request.cities, id: \.self) { city in
+                                    Text(city).tag(city)
+                                }
+                            }
+                        }
+
+                        CompactPlanPicker(title: "Тип") {
+                            Picker("Тип", selection: $selectedCategory) {
+                                ForEach(PlanCategory.allCases) { category in
+                                    Label(category.title, systemImage: category.systemImage)
+                                        .tag(category)
+                                }
                             }
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Тип")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
-
-                        PlanCategorySelector(selection: $selectedCategory)
-                    }
-                    .padding(12)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 7) {
                             Text("Дата и время")
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(AppColors.ink)
 
-                            Spacer()
-                        }
+                            VStack(spacing: 0) {
+                                ScheduleEndpointRow(
+                                    title: "Начало",
+                                    dateSelection: $startDate,
+                                    timeSelection: $startTime,
+                                    dates: request.dates
+                                )
 
-                        VStack(spacing: 10) {
-                            ScheduleEndpointCard(
-                                title: "Начало",
-                                dateSelection: $startDate,
-                                timeSelection: $startTime,
-                                dates: request.dates
-                            )
+                                Divider()
+                                    .padding(.leading, 76)
 
-                            ScheduleEndpointCard(
-                                title: "Конец",
-                                dateSelection: $endDate,
-                                timeSelection: $endTime,
-                                dates: request.dates
-                            )
+                                ScheduleEndpointRow(
+                                    title: "Конец",
+                                    dateSelection: $endDate,
+                                    timeSelection: $endTime,
+                                    dates: request.dates
+                                )
+                            }
+                            .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
 
                         if let timeValidationMessage {
@@ -1197,7 +1196,7 @@ private struct PlanItemEditorView: View {
                             .foregroundStyle(AppColors.ink)
                             .scrollContentBackground(.hidden)
                             .padding(10)
-                            .frame(minHeight: 108)
+                            .frame(minHeight: 90)
                             .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1360,55 +1359,6 @@ private struct PlanItemEditorView: View {
     }
 }
 
-private struct PlanCategorySelector: View {
-    @Binding var selection: PlanCategory
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(PlanCategory.allCases) { category in
-                Button {
-                    selection = category
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: category.systemImage)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(selection == category ? Color.white : AppColors.accent)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                selection == category ? AppColors.accent : AppColors.accentSoft,
-                                in: Circle()
-                            )
-
-                        Text(category.title)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 9)
-                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                    .background(
-                        selection == category ? AppColors.accentSoft : AppColors.itemBackground,
-                        in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .stroke(selection == category ? AppColors.accent.opacity(0.45) : Color.black.opacity(0.06), lineWidth: 1)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
 private struct CompactPlanPicker<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content
@@ -1431,26 +1381,25 @@ private struct CompactPlanPicker<Content: View>: View {
     }
 }
 
-private struct ScheduleEndpointCard: View {
+private struct ScheduleEndpointRow: View {
     let title: String
     @Binding var dateSelection: String
     @Binding var timeSelection: Date
     let dates: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
             Text(title)
-                .font(.caption.weight(.heavy))
+                .font(.caption.weight(.bold))
                 .foregroundStyle(AppColors.muted)
-                .textCase(.uppercase)
+                .frame(width: 56, alignment: .leading)
 
-            HStack(spacing: 8) {
-                DateField(selection: $dateSelection, dates: dates)
-                TimePickerField(selection: $timeSelection)
-            }
+            DateField(selection: $dateSelection, dates: dates)
+            TimePickerField(selection: $timeSelection)
         }
-        .padding(10)
-        .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(minHeight: 48)
     }
 }
 
@@ -1470,8 +1419,8 @@ private struct TimePickerField: View {
                 .tint(AppColors.accent)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1511,8 +1460,8 @@ private struct DateField: View {
                     .foregroundStyle(AppColors.muted)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
             .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
