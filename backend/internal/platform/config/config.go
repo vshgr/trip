@@ -17,6 +17,7 @@ type Config struct {
 	DatabaseURL         string
 	DatabaseMaxConns    int32
 	DatabaseMinConns    int32
+	JWTSecret           string
 	LogLevel            string
 }
 
@@ -31,6 +32,7 @@ func Load() (Config, error) {
 		DatabaseURL:         env("DATABASE_URL", ""),
 		DatabaseMaxConns:    int32Env("DATABASE_MAX_CONNS", 20),
 		DatabaseMinConns:    int32Env("DATABASE_MIN_CONNS", 2),
+		JWTSecret:           env("JWT_SECRET", "local-dev-secret-change-me"),
 		LogLevel:            env("LOG_LEVEL", "debug"),
 	}
 

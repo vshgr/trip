@@ -22,7 +22,7 @@ func (p fakePinger) Ping(context.Context) error {
 func (p fakePinger) Close() {}
 
 func TestLiveHealth(t *testing.T) {
-	router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), fakePinger{})
+	router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), fakePinger{}, "test-secret")
 	request := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	response := httptest.NewRecorder()
 
@@ -37,7 +37,7 @@ func TestLiveHealth(t *testing.T) {
 }
 
 func TestReadyHealthWhenDatabaseFails(t *testing.T) {
-	router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), fakePinger{err: errors.New("down")})
+	router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), fakePinger{err: errors.New("down")}, "test-secret")
 	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	response := httptest.NewRecorder()
 

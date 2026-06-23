@@ -41,7 +41,11 @@ API:
 
 - `GET http://localhost:8080/health/live`
 - `GET http://localhost:8080/health/ready`
+- `POST http://localhost:8080/api/v1/auth/register`
+- `POST http://localhost:8080/api/v1/auth/login`
+- `POST http://localhost:8080/api/v1/auth/yandex`
 - `GET http://localhost:8080/api/v1/trips`
+- `POST http://localhost:8080/api/v1/trips`
 - `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e`
 - `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/days`
 - `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/plan-items`
@@ -143,18 +147,37 @@ Implemented:
 
 - `GET /health/live`
 - `GET /health/ready`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/yandex`
+- `GET /api/v1/me`
+- `PATCH /api/v1/me`
 - `GET /api/v1/trips`
+- `POST /api/v1/trips`
 - `GET /api/v1/trips/{trip_id}`
+- `PATCH /api/v1/trips/{trip_id}`
+- `DELETE /api/v1/trips/{trip_id}`
 - `GET /api/v1/trips/{trip_id}/days`
 - `GET /api/v1/trips/{trip_id}/plan-items`
+- `POST /api/v1/trips/{trip_id}/plan-items`
+- `PATCH /api/v1/trips/{trip_id}/plan-items/{item_id}`
+- `DELETE /api/v1/trips/{trip_id}/plan-items/{item_id}`
 - `GET /api/v1/trips/{trip_id}/schedule-progress`
 - `GET /api/v1/trips/{trip_id}/expenses`
+- `POST /api/v1/trips/{trip_id}/expenses`
+- `PATCH /api/v1/trips/{trip_id}/expenses/{expense_id}`
+- `DELETE /api/v1/trips/{trip_id}/expenses/{expense_id}`
 - `GET /api/v1/trips/{trip_id}/balances`
 - `GET /api/v1/trips/{trip_id}/widget`
+- `POST /api/v1/import/local-data`
 
-Planned API resources are defined in `api/openapi.yaml`; auth, write operations, and local data import endpoints are not implemented yet.
+Planned API resources are defined in `api/openapi.yaml`.
 
 See `../docs/backend/api-status.md` for the current implementation status.
+See `../docs/backend/local-checks.md` for manual curl checks.
+See `../docs/backend/yandex-id.md` for Yandex ID integration notes.
 
 ## Vendor
 

@@ -11,7 +11,7 @@ import (
 	"github.com/vshgr/trip/backend/internal/platform/database"
 )
 
-func NewRouter(logger *slog.Logger, db database.Pinger) http.Handler {
+func NewRouter(logger *slog.Logger, db database.Pinger, jwtSecret string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +32,8 @@ func NewRouter(logger *slog.Logger, db database.Pinger) http.Handler {
 
 	if provider, ok := db.(interface{ Raw() *pgxpool.Pool }); ok {
 		RegisterTripReadHandlers(mux, provider.Raw())
+		RegisterTripWriteHandlers(mux, provider.Raw())
+		RegisterAuthHandlers(mux, provider.Raw(), jwtSecret)
 	}
 
 	var handler http.Handler = mux

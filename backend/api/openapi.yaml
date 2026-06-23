@@ -35,54 +35,81 @@ paths:
       operationId: register
       tags: [Auth]
       responses:
-        "501":
+        "201":
+          description: User registered.
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
   /api/v1/auth/login:
     post:
       operationId: login
       tags: [Auth]
       responses:
-        "501":
+        "200":
+          description: User logged in.
+        "401":
           $ref: "#/components/responses/Error"
   /api/v1/auth/refresh:
     post:
       operationId: refresh
       tags: [Auth]
       responses:
-        "501":
+        "200":
+          description: Session refreshed.
+        "401":
           $ref: "#/components/responses/Error"
   /api/v1/auth/logout:
     post:
       operationId: logout
       tags: [Auth]
       responses:
-        "501":
+        "200":
+          description: Session revoked.
+  /api/v1/auth/yandex:
+    post:
+      operationId: loginWithYandex
+      tags: [Auth]
+      responses:
+        "200":
+          description: Yandex OAuth token exchanged for backend tokens.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
           $ref: "#/components/responses/Error"
   /api/v1/me:
     get:
       operationId: getMe
       tags: [Auth]
       responses:
-        "501":
+        "200":
+          description: Current user.
+        "401":
           $ref: "#/components/responses/Error"
     patch:
       operationId: updateMe
       tags: [Auth]
       responses:
-        "501":
+        "200":
+          description: User updated.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
           $ref: "#/components/responses/Error"
   /api/v1/trips:
     get:
       operationId: listTrips
       tags: [Trips]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Trip list.
     post:
       operationId: createTrip
       tags: [Trips]
       responses:
-        "501":
+        "201":
+          description: Trip created.
+        "400":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}:
     parameters:
@@ -91,19 +118,27 @@ paths:
       operationId: getTrip
       tags: [Trips]
       responses:
-        "501":
+        "200":
+          description: Trip details.
+        "404":
           $ref: "#/components/responses/Error"
     patch:
       operationId: updateTrip
       tags: [Trips]
       responses:
-        "501":
+        "200":
+          description: Trip updated.
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
           $ref: "#/components/responses/Error"
     delete:
       operationId: deleteTrip
       tags: [Trips]
       responses:
-        "501":
+        "200":
+          description: Trip soft-deleted.
+        "404":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/days:
     parameters:
@@ -112,8 +147,8 @@ paths:
       operationId: listTripDays
       tags: [Itinerary]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Trip days.
   /api/v1/trips/{trip_id}/plan-items:
     parameters:
       - $ref: "#/components/parameters/TripID"
@@ -121,13 +156,42 @@ paths:
       operationId: listPlanItems
       tags: [Itinerary]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Plan items.
     post:
       operationId: createPlanItem
       tags: [Itinerary]
       responses:
-        "501":
+        "201":
+          description: Plan item created.
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/trips/{trip_id}/plan-items/{item_id}:
+    parameters:
+      - $ref: "#/components/parameters/TripID"
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updatePlanItem
+      tags: [Itinerary]
+      responses:
+        "200":
+          description: Plan item updated.
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deletePlanItem
+      tags: [Itinerary]
+      responses:
+        "200":
+          description: Plan item soft-deleted.
+        "404":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/schedule-progress:
     parameters:
@@ -136,8 +200,8 @@ paths:
       operationId: getScheduleProgress
       tags: [Itinerary]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Schedule progress.
   /api/v1/trips/{trip_id}/expenses:
     parameters:
       - $ref: "#/components/parameters/TripID"
@@ -145,13 +209,42 @@ paths:
       operationId: listExpenses
       tags: [Expenses]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Expense list.
     post:
       operationId: createExpense
       tags: [Expenses]
       responses:
-        "501":
+        "201":
+          description: Expense created.
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/trips/{trip_id}/expenses/{expense_id}:
+    parameters:
+      - $ref: "#/components/parameters/TripID"
+      - name: expense_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateExpense
+      tags: [Expenses]
+      responses:
+        "200":
+          description: Expense updated.
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteExpense
+      tags: [Expenses]
+      responses:
+        "200":
+          description: Expense soft-deleted.
+        "404":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/balances:
     parameters:
@@ -160,8 +253,8 @@ paths:
       operationId: getBalances
       tags: [Expenses]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Balances.
   /api/v1/trips/{trip_id}/widget:
     parameters:
       - $ref: "#/components/parameters/TripID"
@@ -169,14 +262,16 @@ paths:
       operationId: getTripWidget
       tags: [Widgets]
       responses:
-        "501":
-          $ref: "#/components/responses/Error"
+        "200":
+          description: Widget read model.
   /api/v1/import/local-data:
     post:
       operationId: importLocalData
       tags: [Migration]
       responses:
-        "501":
+        "201":
+          description: Local data imported.
+        "400":
           $ref: "#/components/responses/Error"
 components:
   parameters:

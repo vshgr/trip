@@ -36,7 +36,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           httpx.NewRouter(logger, db),
+		Handler:           httpx.NewRouter(logger, db, cfg.JWTSecret),
 		ReadHeaderTimeout: cfg.HTTPReadTimeout,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
