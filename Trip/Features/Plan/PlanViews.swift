@@ -788,22 +788,17 @@ struct TimelinePlanCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    onEdit()
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.callout.weight(.heavy))
-                        .frame(width: 36, height: 36)
-                        .contentShape(Rectangle())
-                }
-                .foregroundStyle(AppColors.accent)
-                .accessibilityLabel("Изменить")
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: height, alignment: .leading)
             .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .onTapGesture {
+                onEdit()
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Открыть редактирование")
             .offset(x: horizontalOffset)
             .buttonStyle(.plain)
             .simultaneousGesture(
@@ -922,7 +917,6 @@ struct PlanItemEditorView: View {
     @State private var startTime: Date
     @State private var endDate: String
     @State private var endTime: Date
-    @State private var hasExactTime: Bool
     @State private var needsTicket: Bool
     @State private var ticketBought: Bool
     @State private var text: String
@@ -937,7 +931,6 @@ struct PlanItemEditorView: View {
         _startTime = State(initialValue: Self.timeDate(from: request.item?.startTime) ?? Self.timeDate(hour: 9, minute: 0))
         _endDate = State(initialValue: request.item?.endDate ?? request.item?.startDate ?? request.defaultDate)
         _endTime = State(initialValue: Self.timeDate(from: request.item?.endTime) ?? Self.timeDate(hour: 10, minute: 0))
-        _hasExactTime = State(initialValue: request.item?.hasExactTime ?? true)
         _needsTicket = State(initialValue: request.item?.needsTicket ?? false)
         _ticketBought = State(initialValue: request.item?.ticketBought ?? false)
         _text = State(initialValue: request.item?.title ?? "")
@@ -947,121 +940,84 @@ struct PlanItemEditorView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    CompactPlanPicker(title: "Город") {
-                        Picker("Город", selection: $selectedCity) {
-                            ForEach(request.cities, id: \.self) { city in
-                                Text(city).tag(city)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Тип")
-                            .font(.subheadline.weight(.bold))
+                VStack(spacing: 22) {
+                    CalendarFormSection {
+                        TextField("Например: Саграда Фамилия", text: $text, axis: .vertical)
+                            .font(.body)
                             .foregroundStyle(AppColors.ink)
-
-                        PlanCategorySelector(selection: $selectedCategory)
-                    }
-                    .padding(12)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                            .lineLimit(1...3)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Дата и время")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(AppColors.ink)
+                    CalendarFormSection {
+                        CityMenuField(selection: $selectedCity, cities: request.cities)
 
-                            Spacer()
+                        CalendarDivider()
 
-                            Toggle("Точное время", isOn: $hasExactTime)
-                                .labelsHidden()
-                                .tint(AppColors.accent)
-                        }
+                        CategoryMenuField(selection: $selectedCategory)
+                    }
 
-                        VStack(spacing: 10) {
-                            ScheduleEndpointCard(
+                    CalendarFormSection {
+                        VStack(spacing: 0) {
+                            ScheduleEndpointRow(
                                 title: "Начало",
                                 dateSelection: $startDate,
                                 timeSelection: $startTime,
-                                dates: request.dates,
-                                isTimeEnabled: hasExactTime
+                                dates: request.dates
                             )
 
-                            ScheduleEndpointCard(
+                            CalendarDivider()
+
+                            ScheduleEndpointRow(
                                 title: "Конец",
                                 dateSelection: $endDate,
                                 timeSelection: $endTime,
-                                dates: request.dates,
-                                isTimeEnabled: hasExactTime
+                                dates: request.dates
                             )
                         }
-
-                        if let timeValidationMessage {
-                            Text(timeValidationMessage)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AppColors.warning)
-                        }
-                    }
-                    .padding(12)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Пункт плана")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
-
-                        TextEditor(text: $text)
-                            .font(.subheadline)
-                            .foregroundStyle(AppColors.ink)
-                            .scrollContentBackground(.hidden)
-                            .padding(10)
-                            .frame(minHeight: 108)
-                            .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                            }
+                    if let timeValidationMessage {
+                        Text(timeValidationMessage)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(AppColors.warning)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
+                    CalendarFormSection {
                         Toggle(isOn: $needsTicket) {
                             Text("Нужен билет")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.body)
                                 .foregroundStyle(AppColors.ink)
                         }
                         .tint(AppColors.accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
 
-                        Toggle(isOn: $ticketBought) {
-                            Text("Билет куплен")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(needsTicket ? AppColors.ink : AppColors.faint)
-                        }
-                        .tint(AppColors.success)
-                        .disabled(!needsTicket)
-                        .onChange(of: needsTicket) { _, newValue in
-                            if !newValue {
-                                ticketBought = false
+                        if needsTicket {
+                            CalendarDivider()
+
+                            Toggle(isOn: $ticketBought) {
+                                Text("Билет куплен")
+                                    .font(.body)
+                                    .foregroundStyle(AppColors.ink)
                             }
+                            .tint(AppColors.success)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .animation(.easeInOut(duration: 0.18), value: needsTicket)
 
                     Spacer(minLength: 8)
                 }
-                .padding(14)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
             }
-            .background(Color.white.ignoresSafeArea())
+            .background(AppColors.placeholder.ignoresSafeArea())
             .navigationTitle(request.item == nil ? "Новый пункт" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1073,17 +1029,20 @@ struct PlanItemEditorView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
+                    Button {
                         guard let draft = validatedDraft() else {
                             return
                         }
 
                         onSave(draft)
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.headline.weight(.bold))
                     }
-                    .fontWeight(.bold)
-                    .foregroundStyle(AppColors.accent)
+                    .foregroundStyle(canSave ? AppColors.accent : AppColors.faint)
                     .disabled(!canSave)
+                    .accessibilityLabel("Сохранить")
                 }
             }
         }
@@ -1099,8 +1058,10 @@ struct PlanItemEditorView: View {
         .onChange(of: endTime) { _, _ in
             validateTimes()
         }
-        .onChange(of: hasExactTime) { _, _ in
-            validateTimes()
+        .onChange(of: needsTicket) { _, newValue in
+            if !newValue {
+                ticketBought = false
+            }
         }
         .preferredColorScheme(.light)
     }
@@ -1110,10 +1071,6 @@ struct PlanItemEditorView: View {
     }
 
     private var currentTimeValidationMessage: String? {
-        guard hasExactTime else {
-            return nil
-        }
-
         let start = dateIndex(for: startDate) * TimelineLayout.minutesPerDay + minutes(from: startTime)
         let end = dateIndex(for: endDate) * TimelineLayout.minutesPerDay + minutes(from: endTime)
 
@@ -1135,8 +1092,8 @@ struct PlanItemEditorView: View {
             return nil
         }
 
-        let normalizedStartTime = hasExactTime ? timeString(from: startTime) : ""
-        let normalizedEndTime = hasExactTime ? timeString(from: endTime) : ""
+        let normalizedStartTime = timeString(from: startTime)
+        let normalizedEndTime = timeString(from: endTime)
 
         return PlanItemDraft(
             title: text,
@@ -1184,127 +1141,134 @@ struct PlanItemEditorView: View {
     }
 }
 
-struct PlanCategorySelector: View {
-    @Binding var selection: PlanCategory
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(PlanCategory.allCases) { category in
-                Button {
-                    selection = category
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: category.systemImage)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(selection == category ? Color.white : AppColors.accent)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                selection == category ? AppColors.accent : AppColors.accentSoft,
-                                in: Circle()
-                            )
-
-                        Text(category.title)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.ink)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 9)
-                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                    .background(
-                        selection == category ? AppColors.accentSoft : AppColors.itemBackground,
-                        in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .stroke(selection == category ? AppColors.accent.opacity(0.45) : Color.black.opacity(0.06), lineWidth: 1)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-struct CompactPlanPicker<Content: View>: View {
-    let title: String
+struct CalendarFormSection<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.muted)
-
+        VStack(spacing: 0) {
             content()
-                .pickerStyle(.menu)
-                .tint(AppColors.accent)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
-struct ScheduleEndpointCard: View {
+struct CalendarDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 16)
+    }
+}
+
+struct CategoryMenuField: View {
+    @Binding var selection: PlanCategory
+
+    var body: some View {
+        Menu {
+            Picker("Тип", selection: $selection) {
+                ForEach(PlanCategory.allCases) { category in
+                    Label(category.title, systemImage: category.systemImage)
+                        .tag(category)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Text("Тип")
+                    .font(.body)
+                    .foregroundStyle(AppColors.ink)
+
+                Spacer(minLength: 12)
+
+                Image(systemName: selection.systemImage)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 24)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppColors.faint)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct CityMenuField: View {
+    @Binding var selection: String
+    let cities: [String]
+
+    var body: some View {
+        Menu {
+            Picker("Город", selection: $selection) {
+                ForEach(cities, id: \.self) { city in
+                    Text(city).tag(city)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Text("Город")
+                    .font(.body)
+                    .foregroundStyle(AppColors.ink)
+
+                Spacer(minLength: 12)
+
+                Text(selection)
+                    .font(.body)
+                    .foregroundStyle(AppColors.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppColors.faint)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ScheduleEndpointRow: View {
     let title: String
     @Binding var dateSelection: String
     @Binding var timeSelection: Date
     let dates: [String]
-    let isTimeEnabled: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
             Text(title)
-                .font(.caption.weight(.heavy))
-                .foregroundStyle(AppColors.muted)
-                .textCase(.uppercase)
+                .font(.body)
+                .foregroundStyle(AppColors.ink)
+                .frame(width: 72, alignment: .leading)
 
-            HStack(spacing: 8) {
-                DateField(selection: $dateSelection, dates: dates)
-                TimePickerField(selection: $timeSelection, isEnabled: isTimeEnabled)
-            }
+            DateField(selection: $dateSelection, dates: dates)
+
+            Spacer(minLength: 8)
+
+            TimePickerField(selection: $timeSelection)
         }
-        .padding(10)
-        .background(AppColors.itemBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(minHeight: 48)
     }
 }
 
 struct TimePickerField: View {
     @Binding var selection: Date
-    let isEnabled: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "clock")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.accent)
-                .frame(width: 20)
-
+        HStack {
             DatePicker("Время", selection: $selection, displayedComponents: .hourAndMinute)
                 .labelsHidden()
                 .datePickerStyle(.compact)
-                .disabled(!isEnabled)
                 .tint(AppColors.accent)
         }
-        .opacity(isEnabled ? 1 : 0.42)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
+        .frame(minHeight: 34, alignment: .trailing)
     }
 }
 
@@ -1320,32 +1284,18 @@ struct DateField: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "calendar")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(AppColors.accent)
-                    .frame(width: 20)
-
+            HStack(spacing: 5) {
                 Text(selection)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppColors.ink)
+                    .font(.body)
+                    .foregroundStyle(AppColors.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
 
-                Spacer(minLength: 4)
-
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(AppColors.muted)
+                    .foregroundStyle(AppColors.faint)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
-            }
+            .frame(minHeight: 34, alignment: .leading)
         }
         .buttonStyle(.plain)
     }
