@@ -41,6 +41,14 @@ API:
 
 - `GET http://localhost:8080/health/live`
 - `GET http://localhost:8080/health/ready`
+- `GET http://localhost:8080/api/v1/trips`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/days`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/plan-items`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/schedule-progress`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/expenses`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/balances`
+- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/widget`
 
 Docker Compose starts:
 
@@ -70,8 +78,11 @@ Local Docker credentials:
 - user: `trip`
 - password: `trip`
 - URL: `postgres://trip:trip@localhost:5432/trip?sslmode=disable`
+- JDBC URL for DBeaver: `jdbc:postgresql://localhost:5432/trip`
 
 Migrations are plain SQL files under `db/migrations`. Applied versions are recorded in `schema_migrations`.
+
+The seed migration `000002_seed_europe_trip` creates a demo trip, route days, plan items, trip parties, expenses, and expense shares. This data is intended for local API and iOS integration checks.
 
 Useful commands:
 
@@ -82,6 +93,14 @@ make migrate
 make run
 docker compose down
 ```
+
+To inspect data in DBeaver, start Docker Compose first, then create a PostgreSQL connection with:
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `trip`
+- Username: `trip`
+- Password: `trip`
 
 ## Environment
 
@@ -120,14 +139,26 @@ Current unit tests cover:
 
 ## Endpoints
 
-Implemented in Stage 1:
+Implemented:
 
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /api/v1/trips`
+- `GET /api/v1/trips/{trip_id}`
+- `GET /api/v1/trips/{trip_id}/days`
+- `GET /api/v1/trips/{trip_id}/plan-items`
+- `GET /api/v1/trips/{trip_id}/schedule-progress`
+- `GET /api/v1/trips/{trip_id}/expenses`
+- `GET /api/v1/trips/{trip_id}/balances`
+- `GET /api/v1/trips/{trip_id}/widget`
 
-Planned API resources are defined in `api/openapi.yaml`; auth, trips, itinerary, expenses, widget, and import endpoints are not implemented yet.
+Planned API resources are defined in `api/openapi.yaml`; auth, write operations, and local data import endpoints are not implemented yet.
 
 See `../docs/backend/api-status.md` for the current implementation status.
+
+## Vendor
+
+`vendor/` is committed so Docker builds can run without downloading Go modules from `proxy.golang.org`. This helps in networks or Docker environments with TLS/proxy issues. If Docker can access `proxy.golang.org` normally, the project can be switched back to online module downloads by removing `vendor/` and dropping `-mod=vendor` from the Docker build.
 
 ## Troubleshooting
 

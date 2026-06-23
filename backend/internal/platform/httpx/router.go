@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/vshgr/trip/backend/internal/platform/database"
 )
 
@@ -27,6 +29,10 @@ func NewRouter(logger *slog.Logger, db database.Pinger) http.Handler {
 
 		WriteJSON(w, http.StatusOK, Envelope{Data: map[string]string{"status": "ready"}})
 	})
+
+	if provider, ok := db.(interface{ Raw() *pgxpool.Pool }); ok {
+		RegisterTripReadHandlers(mux, provider.Raw())
+	}
 
 	var handler http.Handler = mux
 	handler = AccessLog(logger)(handler)
