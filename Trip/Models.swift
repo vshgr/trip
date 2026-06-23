@@ -1440,8 +1440,8 @@ final class ExpenseStore: ObservableObject {
         rates[.rub] = 1
         rates[.eur] = 100
         rates[.usd] = 92
-        rates[.gbp] = 118
-        rates[.turkishLira] = 2.8
+        rates[.kzt] = 0.1532
+        rates[.jpy] = 0.4618
         if
             let data = UserDefaults.standard.data(forKey: ratesKey),
             let decoded = try? JSONDecoder().decode([ExpenseCurrency: Double].self, from: data)
