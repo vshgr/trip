@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/vshgr/trip/backend/internal/platform/config"
 	"github.com/vshgr/trip/backend/internal/platform/database"
@@ -23,7 +24,14 @@ func main() {
 	}
 
 	logger := logging.New(cfg.LogLevel)
-	db := database.NewDeferredPool(cfg.DatabaseURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	db, err := database.Open(ctx, cfg.DatabaseURL, cfg.DatabaseMaxConns, cfg.DatabaseMinConns)
+	if err != nil {
+		logger.Error("open database", "error", err)
+		os.Exit(1)
+	}
 	defer db.Close()
 
 	server := &http.Server{
@@ -47,10 +55,10 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.HTTPShutdownTimeout)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.HTTPShutdownTimeout)
+	defer shutdownCancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}

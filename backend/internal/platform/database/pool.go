@@ -2,7 +2,10 @@ package database
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Pinger interface {
@@ -10,23 +13,49 @@ type Pinger interface {
 	Close()
 }
 
-type DeferredPool struct {
-	databaseURL string
+type Pool struct {
+	pool *pgxpool.Pool
 }
 
-func NewDeferredPool(databaseURL string) *DeferredPool {
-	return &DeferredPool{databaseURL: databaseURL}
-}
-
-func (p *DeferredPool) Ping(ctx context.Context) error {
-	if p.databaseURL == "" {
-		return errors.New("DATABASE_URL is not configured")
+func Open(ctx context.Context, databaseURL string, maxConns int32, minConns int32) (*Pool, error) {
+	if databaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
-	// Stage 1 keeps the API skeleton dependency-light because the local
-	// workspace currently lacks a Go toolchain. The pgx-backed pool replaces
-	// this implementation when repository integration starts.
-	return nil
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse database config: %w", err)
+	}
+	if maxConns > 0 {
+		config.MaxConns = maxConns
+	}
+	if minConns >= 0 {
+		config.MinConns = minConns
+	}
+	config.HealthCheckPeriod = 30 * time.Second
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("create database pool: %w", err)
+	}
+
+	wrapped := &Pool{pool: pool}
+	if err := wrapped.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+
+	return wrapped, nil
 }
 
-func (p *DeferredPool) Close() {}
+func (p *Pool) Ping(ctx context.Context) error {
+	return p.pool.Ping(ctx)
+}
+
+func (p *Pool) Close() {
+	p.pool.Close()
+}
+
+func (p *Pool) Raw() *pgxpool.Pool {
+	return p.pool
+}

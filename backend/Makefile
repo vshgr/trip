@@ -3,7 +3,7 @@ export GOCACHE ?= $(abspath ../.cache/go-build)
 export GOPATH ?= $(abspath ../.cache/gopath)
 export DATABASE_URL ?= postgres://trip:trip@localhost:5432/trip?sslmode=disable
 
-.PHONY: test run docker-up env
+.PHONY: test run migrate docker-up docker-down env
 
 test:
 	$(GO) test ./...
@@ -11,8 +11,14 @@ test:
 run:
 	$(GO) run ./cmd/api
 
+migrate:
+	$(GO) run ./cmd/migrate up
+
 docker-up:
 	docker compose up --build
+
+docker-down:
+	docker compose down
 
 env:
 	@echo "GO=$(GO)"

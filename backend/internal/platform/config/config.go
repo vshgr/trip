@@ -3,30 +3,35 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
 	"time"
 )
 
 type Config struct {
 	AppEnv              string
-	HTTPPort           string
-	HTTPReadTimeout    time.Duration
-	HTTPWriteTimeout   time.Duration
-	HTTPIdleTimeout    time.Duration
+	HTTPPort            string
+	HTTPReadTimeout     time.Duration
+	HTTPWriteTimeout    time.Duration
+	HTTPIdleTimeout     time.Duration
 	HTTPShutdownTimeout time.Duration
-	DatabaseURL        string
-	LogLevel           string
+	DatabaseURL         string
+	DatabaseMaxConns    int32
+	DatabaseMinConns    int32
+	LogLevel            string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
 		AppEnv:              env("APP_ENV", "local"),
-		HTTPPort:           env("HTTP_PORT", "8080"),
-		HTTPReadTimeout:    durationEnv("HTTP_READ_TIMEOUT", 10*time.Second),
-		HTTPWriteTimeout:   durationEnv("HTTP_WRITE_TIMEOUT", 15*time.Second),
-		HTTPIdleTimeout:    durationEnv("HTTP_IDLE_TIMEOUT", 60*time.Second),
+		HTTPPort:            env("HTTP_PORT", "8080"),
+		HTTPReadTimeout:     durationEnv("HTTP_READ_TIMEOUT", 10*time.Second),
+		HTTPWriteTimeout:    durationEnv("HTTP_WRITE_TIMEOUT", 15*time.Second),
+		HTTPIdleTimeout:     durationEnv("HTTP_IDLE_TIMEOUT", 60*time.Second),
 		HTTPShutdownTimeout: durationEnv("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
-		DatabaseURL:        env("DATABASE_URL", ""),
-		LogLevel:           env("LOG_LEVEL", "debug"),
+		DatabaseURL:         env("DATABASE_URL", ""),
+		DatabaseMaxConns:    int32Env("DATABASE_MAX_CONNS", 20),
+		DatabaseMinConns:    int32Env("DATABASE_MIN_CONNS", 2),
+		LogLevel:            env("LOG_LEVEL", "debug"),
 	}
 
 	if cfg.HTTPPort == "" {
@@ -54,4 +59,17 @@ func durationEnv(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
+}
+
+func int32Env(key string, fallback int32) int32 {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		return fallback
+	}
+	return int32(parsed)
 }

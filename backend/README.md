@@ -30,10 +30,11 @@ go version
 
 ## Run
 
+The API now requires PostgreSQL. The easiest local path is Docker Compose:
+
 ```bash
 cd backend
-make test
-make run
+docker compose up --build
 ```
 
 API:
@@ -41,7 +42,19 @@ API:
 - `GET http://localhost:8080/health/live`
 - `GET http://localhost:8080/health/ready`
 
-Without PostgreSQL, `/health/live` is enough to verify that the HTTP API starts. `/health/ready` expects `DATABASE_URL`; Stage 1 only checks that it is configured, and the pgx-backed ping is added with repository integration.
+Docker Compose starts:
+
+- `postgres` on `localhost:5432`;
+- `migrate`, which applies `db/migrations/*.up.sql`;
+- `api` on `localhost:8080`.
+
+If you already have PostgreSQL running locally:
+
+```bash
+cd backend
+make migrate
+make run
+```
 
 You can also run from the repository root:
 
@@ -49,11 +62,25 @@ You can also run from the repository root:
 scripts/backend-run-local.sh
 ```
 
-With Docker Desktop installed:
+## Database
+
+Local Docker credentials:
+
+- database: `trip`
+- user: `trip`
+- password: `trip`
+- URL: `postgres://trip:trip@localhost:5432/trip?sslmode=disable`
+
+Migrations are plain SQL files under `db/migrations`. Applied versions are recorded in `schema_migrations`.
+
+Useful commands:
 
 ```bash
 cd backend
-docker compose up --build
+docker compose up -d postgres
+make migrate
+make run
+docker compose down
 ```
 
 ## Environment
@@ -75,7 +102,7 @@ Important variables:
 
 Migration files live in `db/migrations`.
 
-Stage 1 defines the initial schema. A migration runner will be wired in the next persistence stage; until then, run the SQL with your preferred migration tool.
+The initial schema creates users, sessions, trips, cities, members, guest parties, days, plan items, expenses, shares, receipts, and receipt items.
 
 ## Tests
 
@@ -98,7 +125,9 @@ Implemented in Stage 1:
 - `GET /health/live`
 - `GET /health/ready`
 
-Planned API resources are defined in `api/openapi.yaml`.
+Planned API resources are defined in `api/openapi.yaml`; auth, trips, itinerary, expenses, widget, and import endpoints are not implemented yet.
+
+See `../docs/backend/api-status.md` for the current implementation status.
 
 ## Troubleshooting
 

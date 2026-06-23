@@ -21,5 +21,15 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build: .
+    env_file: .env.example
+    entrypoint: ["trip-migrate", "up"]
+    environment:
+      DATABASE_URL: postgres://trip:trip@postgres:5432/trip?sslmode=disable
+    depends_on:
       postgres:
         condition: service_healthy
