@@ -30,6 +30,8 @@ backend/api/openapi.yaml
 - error envelope;
 - bearer auth схема.
 
+Подробное человекочитаемое описание каждого endpoint, всех полей и примеров лежит в `docs/backend/api-reference.md`.
+
 ## Как использовать для iOS
 
 1. Открыть `http://localhost:8081`.

@@ -4,15 +4,16 @@
 
 ## Структура iOS
 
-- `Trip/TripApp.swift`: точка входа SwiftUI-приложения.
-- `Trip/ContentView.swift`: основной экран и локальные stores.
-- `Trip/Features/Trips/TripsViews.swift`: каталог поездок и редактор поездки.
-- `Trip/Features/AppShell/TripWorkspaceViews.swift`: рабочая область выбранной поездки.
-- `Trip/Features/Plan/PlanViews.swift`: календарь, план, timeline, редактор активностей.
-- `Trip/Features/Expenses/ExpenseViews.swift`: расходы, участники, балансы и история.
-- `Trip/Models.swift`: локальные модели, persistence в UserDefaults, расчеты расходов.
-- `Trip/ItineraryData.swift`: встроенный маршрут Europe Trip.
-- `TripWidget/TripWidget.swift`: WidgetKit extension, читает App Group cache.
+- `mobile/ios/Trip/TripApp.swift`: точка входа SwiftUI-приложения.
+- `mobile/ios/Trip/ContentView.swift`: основной экран, auth gate и локальные stores.
+- `mobile/ios/Trip/Features/Auth`: вход через Яндекс ID и профиль.
+- `mobile/ios/Trip/Features/Trips/TripsViews.swift`: каталог поездок и редактор поездки.
+- `mobile/ios/Trip/Features/AppShell/TripWorkspaceViews.swift`: рабочая область выбранной поездки.
+- `mobile/ios/Trip/Features/Plan/PlanViews.swift`: календарь, план, timeline, редактор активностей.
+- `mobile/ios/Trip/Features/Expenses/ExpenseViews.swift`: расходы, участники, балансы и история.
+- `mobile/ios/Trip/Models.swift`: локальные модели, persistence в UserDefaults, расчеты расходов.
+- `mobile/ios/Trip/ItineraryData.swift`: встроенный маршрут Europe Trip.
+- `mobile/ios/TripWidget/TripWidget.swift`: WidgetKit extension, читает App Group cache.
 
 ## Основные локальные модели
 
@@ -76,4 +77,5 @@ iOS сейчас хранит данные локально:
 4. Добавить repository layer между ViewModel/Store и API.
 5. Сначала подключить read endpoints.
 6. Потом подключить create/update/delete.
-7. Затем включить Яндекс ID и import локальных данных.
+7. Подключить текущий iOS auth flow к `POST /api/v1/auth/yandex`.
+8. Затем включить import локальных данных.

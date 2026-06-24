@@ -37,3 +37,9 @@
 - Добавить проверку membership-прав для каждой поездки.
 - Добавить восстановление мягко удаленной поездки.
 - Позже добавить приглашения, роли участников поездки в UI, receipts/OCR и статистику расходов.
+
+## Документация для iOS-интеграции
+
+- `docs/backend/api-reference.md`: подробные endpoint, поля запросов/ответов и примеры.
+- `docs/backend/ios-integration-review.md`: аудит соответствия текущего iOS-приложения backend API.
+- `backend/api/openapi.yaml`: Swagger/OpenAPI-контракт для DTO.
