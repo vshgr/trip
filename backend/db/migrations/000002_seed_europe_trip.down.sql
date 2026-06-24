@@ -1,0 +1,9 @@
+DELETE FROM expense_shares WHERE id::text LIKE '70000000-%';
+DELETE FROM expenses WHERE id::text LIKE '60000000-%';
+DELETE FROM plan_items WHERE id::text LIKE '50000000-%';
+DELETE FROM trip_days WHERE trip_id = '7a835df2-a238-4c4b-9f36-5da11a42b40e';
+DELETE FROM trip_parties WHERE trip_id = '7a835df2-a238-4c4b-9f36-5da11a42b40e';
+DELETE FROM trip_cities WHERE trip_id = '7a835df2-a238-4c4b-9f36-5da11a42b40e';
+DELETE FROM trip_members WHERE trip_id = '7a835df2-a238-4c4b-9f36-5da11a42b40e';
+DELETE FROM trips WHERE id = '7a835df2-a238-4c4b-9f36-5da11a42b40e';
+DELETE FROM users WHERE id = '11111111-1111-1111-1111-111111111111';

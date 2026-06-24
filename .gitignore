@@ -12,6 +12,10 @@ Package.resolved
 # macOS
 .DS_Store
 
+# Local toolchains and caches
+.tools/
+.cache/
+
 # Fastlane / signing artifacts
 fastlane/report.xml
 fastlane/Preview.html
@@ -20,4 +24,3 @@ fastlane/test_output/
 *.mobileprovision
 *.cer
 *.p12
-

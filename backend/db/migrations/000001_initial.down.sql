@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS receipt_items;
+DROP TABLE IF EXISTS receipts;
+DROP TABLE IF EXISTS expense_shares;
+DROP TABLE IF EXISTS expenses;
+DROP TABLE IF EXISTS plan_items;
+DROP TABLE IF EXISTS trip_days;
+DROP TABLE IF EXISTS trip_invitations;
+DROP TABLE IF EXISTS trip_parties;
+DROP TABLE IF EXISTS trip_members;
+DROP TABLE IF EXISTS trip_cities;
+DROP TABLE IF EXISTS trips;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS users;
+DROP EXTENSION IF EXISTS citext;
