@@ -1,24 +1,62 @@
 import SwiftUI
 import WidgetKit
 
+enum AppRootSection: String, CaseIterable, Identifiable {
+    case trips
+    case profile
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .trips:
+            return "Поездки"
+        case .profile:
+            return "Профиль"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .trips:
+            return "suitcase"
+        case .profile:
+            return "person.crop.circle"
+        }
+    }
+}
+
 struct ContentView: View {
     var body: some View {
-        VStack(spacing: 0) {
-            Group {
-                if let selectedTrip {
-                    TripWorkspaceView(planStore: store, expenseStore: expenseStore, trip: selectedTrip)
-                } else {
-                    TripsView(
-                        store: tripCatalogStore,
-                        expenseStore: expenseStore,
-                        selectedTripID: $selectedTripID
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if authStore.isSignedIn {
+                VStack(spacing: 0) {
+                    Group {
+                        switch selectedRootSection {
+                        case .trips:
+                            if let selectedTrip {
+                                TripWorkspaceView(planStore: store, expenseStore: expenseStore, trip: selectedTrip)
+                            } else {
+                                TripsView(
+                                    store: tripCatalogStore,
+                                    expenseStore: expenseStore,
+                                    selectedTripID: $selectedTripID
+                                )
+                            }
+                        case .profile:
+                            ProfileTabView(authStore: authStore)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            TripsTabBar(isShowingTrips: selectedTripID == nil) {
-                selectedTripID = nil
+                    AppRootTabBar(selectedSection: $selectedRootSection) {
+                        selectedTripID = nil
+                    }
+                }
+            } else {
+                AuthLandingView(authStore: authStore)
             }
         }
         .tint(AppColors.accent)
@@ -39,6 +77,8 @@ struct ContentView: View {
     @StateObject private var store = TripStore()
     @StateObject private var expenseStore = ExpenseStore()
     @StateObject private var tripCatalogStore = TripCatalogStore()
+    @StateObject private var authStore = AuthStore()
+    @State private var selectedRootSection: AppRootSection = .trips
     @State private var selectedTripID: UUID?
 
     private var selectedTrip: TravelTrip? {
