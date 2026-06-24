@@ -54,6 +54,632 @@ mobile/ios
 5. Подключить write-сценарии: создание, редактирование и мягкое удаление.
 6. Перевести локальные stores на repositories, оставив `UserDefaults` только как cache/offline-слой.
 
+## Куда добавлять код в iOS
+
+Сейчас в приложении много логики хранится в `mobile/ios/Trip/Models.swift`. Для backend-интеграции лучше не добавлять туда весь сетевой слой, иначе файл станет слишком большим и сложным для поддержки.
+
+Рекомендуемая структура новых файлов:
+
+```text
+mobile/ios/Trip/Networking/BackendConfig.swift
+mobile/ios/Trip/Networking/APIClient.swift
+mobile/ios/Trip/Networking/APIError.swift
+mobile/ios/Trip/Networking/AuthTokenStore.swift
+mobile/ios/Trip/Networking/BackendDTO.swift
+mobile/ios/Trip/Networking/BackendMappers.swift
+mobile/ios/Trip/Networking/AuthRepository.swift
+mobile/ios/Trip/Networking/TripsRepository.swift
+mobile/ios/Trip/Networking/PlanRepository.swift
+mobile/ios/Trip/Networking/ExpensesRepository.swift
+mobile/ios/Trip/Networking/WidgetRepository.swift
+```
+
+Существующие файлы, которые нужно изменить:
+
+| Файл | Что изменить |
+|---|---|
+| `mobile/ios/Trip/TripApp.swift` | Создать зависимости приложения или передать их в `ContentView`, если будет dependency container. |
+| `mobile/ios/Trip/ContentView.swift` | Передать repositories/stores в экраны, добавить восстановление сессии при старте. |
+| `mobile/ios/Trip/Features/Auth/AuthModels.swift` | Убрать прямой production-вызов `https://login.yandex.ru/info`, добавить backend login/refresh/logout/me. |
+| `mobile/ios/Trip/Features/Auth/AuthViews.swift` | Оставить UI входа и профиля, подключить состояния loading/error от `AuthStore`. |
+| `mobile/ios/Trip/Features/Trips/TripsViews.swift` | Загружать список поездок с backend, добавить loading/error/empty states, вызвать create/update/delete через repository. |
+| `mobile/ios/Trip/Features/AppShell/TripWorkspaceViews.swift` | При открытии поездки запускать загрузку деталей, плана, расходов и widget cache. |
+| `mobile/ios/Trip/Features/Plan/PlanViews.swift` | Создание, редактирование и удаление plan item отправлять на backend. |
+| `mobile/ios/Trip/Features/Expenses/ExpenseViews.swift` | Создание, редактирование, удаление расходов и balances брать с backend. |
+| `mobile/ios/Trip/Models.swift` | Постепенно оставить только UI/domain-модели и локальный cache, сетевые DTO вынести в `BackendDTO.swift`. |
+
+Важно: после добавления новых `.swift` файлов их нужно добавить в target `Trip` в Xcode. Если файлы создаются через Xcode, это произойдет автоматически. Если через Finder или Git, нужно проверить `mobile/ios/Trip.xcodeproj/project.pbxproj`.
+
+## Пошаговый план, после которого интеграция должна заработать
+
+### Шаг 1. Добавить сетевой фундамент
+
+Создать `BackendConfig.swift`:
+
+```swift
+struct BackendConfig {
+    let baseURL: URL
+
+    static let debug = BackendConfig(baseURL: URL(string: "http://localhost:8080")!)
+}
+```
+
+Создать `APIError.swift`:
+
+```swift
+enum APIError: Error, Equatable {
+    case invalidURL
+    case unauthorized
+    case forbidden
+    case notFound
+    case validation(String?)
+    case server(Int)
+    case decoding
+    case network(String)
+}
+```
+
+Создать `APIClient.swift`:
+
+- метод `send<RequestBody, ResponseBody>(path:method:body:requiresAuth:)`;
+- JSON encoder/decoder с `snake_case`;
+- автоматическое добавление `Authorization`;
+- обработка `401` через refresh и один retry;
+- единая обработка `403`, `404`, `422`, `5xx`.
+
+Создать `AuthTokenStore.swift`:
+
+- `save(accessToken:refreshToken:expiresIn:)`;
+- `loadAccessToken()`;
+- `loadRefreshToken()`;
+- `clear()`;
+- хранение через Keychain, не через `UserDefaults`.
+
+### Шаг 2. Добавить DTO и mapper
+
+Создать `BackendDTO.swift` и описать DTO по Swagger. Имена можно делать Swift-friendly, но поля должны совпадать через `CodingKeys`.
+
+Минимальные группы DTO:
+
+- `AuthResponseDTO`, `UserDTO`;
+- `TripDTO`, `CityDTO`, `PartyDTO`;
+- `TripDayDTO`;
+- `PlanItemDTO`;
+- `ScheduleProgressDTO`;
+- `ExpenseDTO`, `ExpenseShareDTO`;
+- `BalancesDTO`, `BalanceDTO`, `SettlementDTO`;
+- `TripWidgetDTO`;
+- request DTO для create/update ручек.
+
+Создать `BackendMappers.swift`:
+
+- `UserDTO -> AuthUserProfile`;
+- `TripDTO -> TravelTrip`;
+- `TripDayDTO + [PlanItemDTO] -> [TripDay]`;
+- `PlanItemDTO -> PlanItem`;
+- `ExpenseDTO -> ExpenseItem`;
+- `BalancesDTO -> ExpenseSplitSummary` или новая server-driven модель балансов.
+
+### Шаг 3. Подключить авторизацию
+
+Изменить `AuthStore` в `mobile/ios/Trip/Features/Auth/AuthModels.swift`:
+
+- добавить зависимость `AuthRepository`;
+- `signInWithYandex()` должен запускать Yandex LoginSDK;
+- `completeYandexSignIn(oauthToken:)` должен вызывать `AuthRepository.loginWithYandex(oauthToken:)`, а не `YandexIDAPI.profile`;
+- `init()` должен пробовать восстановить профиль через `GET /api/v1/me`, если в Keychain есть access token;
+- `signOut()` должен вызывать `POST /api/v1/auth/logout`, затем чистить Keychain и локальный профиль.
+
+### Шаг 4. Подключить каталог поездок
+
+Изменить `TripCatalogStore` в `mobile/ios/Trip/Models.swift` или вынести его в отдельный файл:
+
+- добавить `isLoading`, `errorMessage`;
+- добавить `loadTrips() async`;
+- `add(_:)`, `update(_:)`, `delete(_:)` должны иметь backend-версии: `createTrip`, `updateTrip`, `deleteTrip`;
+- локальный `UserDefaults` оставить только как cache последнего успешного списка.
+
+Изменить `TripsView` в `mobile/ios/Trip/Features/Trips/TripsViews.swift`:
+
+- в `.task` вызвать `store.loadTrips()`;
+- добавить pull-to-refresh;
+- на сохранение `TripEditorView` вызывать async create/update;
+- на удаление вызывать backend soft delete;
+- показывать loading/error/empty states.
+
+### Шаг 5. Подключить детали поездки, дни и план
+
+Изменить `TripWorkspaceView` в `mobile/ios/Trip/Features/AppShell/TripWorkspaceViews.swift`:
+
+- при `.onAppear` вызвать загрузку details/days/plan-items/schedule-progress;
+- при смене `trip` отменять старые запросы или игнорировать устаревшие ответы;
+- передавать в `PlanTabView` уже загруженный `TripStore`.
+
+Изменить `TripStore`:
+
+- добавить `loadTripWorkspace(tripID:) async`;
+- внутри параллельно вызвать `GET /trips/{trip_id}`, `GET /days`, `GET /plan-items`, `GET /schedule-progress`;
+- собрать `[TripDay]` через mapper;
+- write-операции `add/update/delete PlanItem` отправлять на backend.
+
+### Шаг 6. Подключить расходы и балансы
+
+Изменить `ExpenseStore`:
+
+- добавить `loadExpensesAndBalances(tripID:) async`;
+- `addExpense`, `updateExpense`, `deleteExpense` должны вызывать backend;
+- после каждой write-операции перезапрашивать `GET /balances`;
+- локальный расчет оставить только для preview/offline fallback, но не как source of truth.
+
+Изменить `ExpensesView`:
+
+- в `.task` загрузить расходы и балансы для активной поездки;
+- отправлять форму `ExpenseEntryView` в `POST /expenses`;
+- после удаления строки вызвать `DELETE /expenses/{expense_id}`;
+- показывать balances из backend.
+
+### Шаг 7. Подключить widget cache
+
+Создать `WidgetRepository.swift`:
+
+- `getTripWidget(tripID:) async throws -> TripWidgetDTO`.
+
+В основном приложении после загрузки поездки:
+
+- вызвать `GET /api/v1/trips/{trip_id}/widget`;
+- сохранить JSON в App Group `group.com.alisa.trip`;
+- вызвать reload timeline;
+- сам widget не должен ходить в сеть.
+
+### Шаг 8. Добавить импорт локальных данных
+
+После успешного первого backend-login:
+
+- проверить, есть ли локальные поездки/план/расходы без backend id;
+- собрать payload для `POST /api/v1/import/local-data`;
+- после успешного импорта заменить локальные id на backend id;
+- поставить флаг `localImportCompleted`, чтобы не импортировать повторно.
+
+## Полная карта endpoint -> iOS
+
+| Endpoint | Repository method | Экран/Store | Файлы | Когда вызывать | Что обновлять |
+|---|---|---|---|---|---|
+| `GET /live` | `HealthRepository.live()` или debug curl | Не нужен в production UI | Новый debug/service файл, если нужен | Только для локальной проверки backend | Ничего в UI |
+| `GET /ready` | `HealthRepository.ready()` или debug curl | Не нужен в production UI | Новый debug/service файл, если нужен | Перед ручным тестированием или debug diagnostics | Ничего в UI |
+| `POST /api/v1/auth/register` | `AuthRepository.register(...)` | Debug/local auth screen, если добавим | `AuthModels.swift`, `AuthViews.swift` | Только если нужен email/password flow | `AuthStore.profile`, Keychain |
+| `POST /api/v1/auth/login` | `AuthRepository.login(...)` | Debug/local auth screen, если добавим | `AuthModels.swift`, `AuthViews.swift` | Только если нужен email/password flow | `AuthStore.profile`, Keychain |
+| `POST /api/v1/auth/yandex` | `AuthRepository.loginWithYandex(oauthToken:deviceID:deviceName:)` | `AuthLandingView`, `AuthStore` | `AuthModels.swift`, `AuthViews.swift`, `AuthRepository.swift` | После успешного Yandex LoginSDK | Keychain, `AuthUserProfile`, root navigation |
+| `POST /api/v1/auth/refresh` | `AuthRepository.refresh(refreshToken:)` | Автоматически в `APIClient` | `APIClient.swift`, `AuthTokenStore.swift`, `AuthRepository.swift` | При `401 TOKEN_EXPIRED` или истекшем access token | Keychain, retry исходного запроса |
+| `POST /api/v1/auth/logout` | `AuthRepository.logout(refreshToken:)` | `ProfileTabView`, `AuthStore` | `AuthModels.swift`, `AuthViews.swift`, `AuthRepository.swift` | Нажатие `Выйти` | Очистить Keychain/cache/profile |
+| `GET /api/v1/me` | `AuthRepository.me()` | `ContentView`, `ProfileTabView`, `AuthStore` | `ContentView.swift`, `AuthModels.swift`, `AuthRepository.swift` | Старт приложения, открытие профиля, после refresh | `AuthStore.profile` |
+| `PATCH /api/v1/me` | `AuthRepository.updateMe(...)` | Будущий экран редактирования профиля | `AuthViews.swift`, `AuthRepository.swift` | Сохранение имени/avatar | `AuthStore.profile` |
+| `GET /api/v1/trips` | `TripsRepository.listTrips()` | `TripsView`, `TripCatalogStore` | `TripsViews.swift`, `Models.swift`, `TripsRepository.swift` | Старт после login, вкладка поездок, pull-to-refresh | `TripCatalogStore.trips` |
+| `POST /api/v1/trips` | `TripsRepository.createTrip(...)` | `TripEditorView`, `TripCatalogStore` | `TripsViews.swift`, `Models.swift`, `TripsRepository.swift` | Сохранение новой поездки | Добавить `TravelTrip`, открыть детали |
+| `GET /api/v1/trips/{trip_id}` | `TripsRepository.getTrip(id:)` | `TripWorkspaceView`, header деталей | `TripWorkspaceViews.swift`, `Models.swift`, `TripsRepository.swift` | Открытие поездки, refresh деталей | Header, selected trip cache |
+| `PATCH /api/v1/trips/{trip_id}` | `TripsRepository.updateTrip(id:request:)` | `TripEditorView`, `TripCatalogStore` | `TripsViews.swift`, `Models.swift`, `TripsRepository.swift` | Сохранение редактирования поездки | Обновить карточку и header |
+| `DELETE /api/v1/trips/{trip_id}` | `TripsRepository.deleteTrip(id:)` | `TripsView`, `TripCardView`, `TripCatalogStore` | `TripsViews.swift`, `Models.swift`, `TripsRepository.swift` | Подтвержденное удаление поездки | Убрать из списка, сбросить selectedTripID |
+| `GET /api/v1/trips/{trip_id}/days` | `PlanRepository.listDays(tripID:)` | `PlanTabView`, `TripStore` | `PlanViews.swift`, `Models.swift`, `PlanRepository.swift` | Открытие поездки, refresh плана | `TripStore.days` skeleton |
+| `GET /api/v1/trips/{trip_id}/plan-items` | `PlanRepository.listPlanItems(tripID:)` | `TimelineView`, `TripStore` | `PlanViews.swift`, `Models.swift`, `PlanRepository.swift` | Открытие поездки, после write | `TripDay.items` |
+| `POST /api/v1/trips/{trip_id}/plan-items` | `PlanRepository.createPlanItem(tripID:request:)` | `PlanItemEditorView`, `TripStore` | `PlanViews.swift`, `Models.swift`, `PlanRepository.swift` | Сохранение нового события | Вставить item в день, обновить progress |
+| `PATCH /api/v1/trips/{trip_id}/plan-items/{item_id}` | `PlanRepository.updatePlanItem(tripID:itemID:request:)` | `PlanItemEditorView`, `TimelinePlanCard`, `TripStore` | `PlanViews.swift`, `Models.swift`, `PlanRepository.swift` | Сохранение редактирования события | Обновить item, пересортировать timeline |
+| `DELETE /api/v1/trips/{trip_id}/plan-items/{item_id}` | `PlanRepository.deletePlanItem(tripID:itemID:)` | `TimelinePlanCard`, `PlanItemEditorView`, `TripStore` | `PlanViews.swift`, `Models.swift`, `PlanRepository.swift` | Подтвержденное удаление события | Убрать item, обновить progress |
+| `GET /api/v1/trips/{trip_id}/schedule-progress` | `PlanRepository.getScheduleProgress(tripID:)` | `TripProgressBar`, `EuropeTripStatusWidget`, `MonthCalendarView` | `AppStyle.swift`, `PlanViews.swift`, `Models.swift`, `PlanRepository.swift` | Открытие поездки, после изменения плана | Progress модели |
+| `GET /api/v1/trips/{trip_id}/expenses` | `ExpensesRepository.listExpenses(tripID:)` | `ExpensesView`, `ExpenseStore` | `ExpenseViews.swift`, `Models.swift`, `ExpensesRepository.swift` | Открытие вкладки трат, refresh | `ExpenseStore.expenses` |
+| `POST /api/v1/trips/{trip_id}/expenses` | `ExpensesRepository.createExpense(tripID:request:)` | `ExpenseEntryView`, `ExpenseStore` | `ExpenseViews.swift`, `Models.swift`, `ExpensesRepository.swift` | Сохранение нового расхода | Добавить расход, обновить balances |
+| `PATCH /api/v1/trips/{trip_id}/expenses/{expense_id}` | `ExpensesRepository.updateExpense(tripID:expenseID:request:)` | Будущий edit expense flow, `ExpenseRowView` | `ExpenseViews.swift`, `Models.swift`, `ExpensesRepository.swift` | Сохранение редактирования расхода | Обновить расход, обновить balances |
+| `DELETE /api/v1/trips/{trip_id}/expenses/{expense_id}` | `ExpensesRepository.deleteExpense(tripID:expenseID:)` | `ExpenseRowView`, `ExpenseStore` | `ExpenseViews.swift`, `Models.swift`, `ExpensesRepository.swift` | Удаление расхода из истории | Убрать расход, обновить balances |
+| `GET /api/v1/trips/{trip_id}/balances` | `ExpensesRepository.getBalances(tripID:)` | `ExpenseTotalsView`, `ExpenseSplitView`, `ExpenseStore` | `ExpenseViews.swift`, `Models.swift`, `ExpensesRepository.swift` | Открытие трат, после любого write расхода | Server balances/settlements |
+| `GET /api/v1/trips/{trip_id}/widget` | `WidgetRepository.getTripWidget(tripID:)` | Основное приложение обновляет WidgetKit cache | `WidgetRepository.swift`, widget-файлы | После открытия поездки и после изменений | App Group JSON для widget |
+| `POST /api/v1/import/local-data` | `ImportRepository.importLocalData(...)` | `AuthStore` или onboarding после login | `AuthModels.swift`, `Models.swift`, `ImportRepository.swift` | Первый вход пользователя с локальными данными | Связать local data с backend ids |
+
+## DTO и mapping по всем ручкам
+
+### Health: `GET /live`, `GET /ready`
+
+Эти ручки нужны не для пользовательского UI, а для проверки, что backend поднят.
+
+Mapping:
+
+| Backend | iOS |
+|---|---|
+| `status` | debug text или игнорировать |
+| `checks.database` в `/ready` | debug diagnostics |
+
+В iOS production их можно не добавлять. Для debug можно сделать скрытый diagnostics screen.
+
+### Local auth: `POST /auth/register`, `POST /auth/login`
+
+Эти ручки нужны, если в приложении будет вход по email/password. Сейчас основной flow - Яндекс ID, поэтому local auth можно оставить для debug или внутреннего тестирования.
+
+Request mapping:
+
+| Backend request | iOS источник |
+|---|---|
+| `email` | поле email на debug auth screen |
+| `password` | secure field |
+| `display_name` | optional profile field |
+| `device_id` | installation id |
+| `device_name` | `UIDevice.current.name` |
+
+Response mapping такой же, как у `POST /auth/yandex`: токены в Keychain, `user` в `AuthUserProfile`.
+
+### Auth response: `POST /auth/yandex`, `POST /auth/refresh`
+
+Response mapping:
+
+| Backend DTO | Swift DTO | UI/domain |
+|---|---|---|
+| `access_token` | `AuthResponseDTO.accessToken` | Keychain |
+| `refresh_token` | `AuthResponseDTO.refreshToken` | Keychain |
+| `token_type` | `AuthResponseDTO.tokenType` | Проверить, что `Bearer` |
+| `expires_in` | `AuthResponseDTO.expiresIn` | Expiration для refresh |
+| `user.id` | `UserDTO.id` | `AuthUserProfile.id` |
+| `user.email` | `UserDTO.email` | `AuthUserProfile.email` |
+| `user.display_name` | `UserDTO.displayName` | `AuthUserProfile.displayName` |
+| `user.avatar_url` | `UserDTO.avatarURL` | `AuthUserProfile.avatarURL` |
+| `user.role` | `UserDTO.role` | `AuthUserProfile.role` или отдельное поле |
+
+В текущем `AuthUserProfile` нет поля `role`. Его нужно добавить:
+
+```swift
+var role: UserRole
+```
+
+И enum:
+
+```swift
+enum UserRole: String, Codable {
+    case admin
+    case user
+}
+```
+
+### Profile: `GET /me`, `PATCH /me`
+
+`GET /me` использует тот же `UserDTO -> AuthUserProfile` mapper.
+
+`PATCH /me` нужен для будущего редактирования профиля.
+
+Request mapping для `PATCH /me`:
+
+| Backend request | Экран | Файл |
+|---|---|---|
+| `display_name` | будущий edit profile sheet | `AuthViews.swift` |
+| `avatar_url` | будущий avatar editor | `AuthViews.swift` |
+
+После success обновить `AuthStore.profile`.
+
+### Trips: list/get/create/update/delete
+
+Swift DTO:
+
+```swift
+struct TripDTO: Decodable {
+    let id: UUID
+    let title: String
+    let startsOn: Date
+    let endsOn: Date
+    let cities: [CityDTO]
+    let parties: [PartyDTO]
+    let coverURL: URL?
+    let scheduleProgress: TripProgressDTO?
+}
+```
+
+Mapping в текущий `TravelTrip`:
+
+| Backend | `TravelTrip` | Где используется |
+|---|---|---|
+| `id` | `id` | `TripsView`, `TripWorkspaceView` |
+| `title` | `title` | `TripCardView`, header |
+| `starts_on` | `startDate` | карточка, editor, header |
+| `ends_on` | `endDate` | карточка, editor, header |
+| `cities[].name` | `cities` | карточка, editor, plan city fallback |
+| `parties[].display_name` | `participants` | header, expenses participants |
+
+Что стоит добавить в `TravelTrip`, чтобы не терять backend-данные:
+
+```swift
+var coverURL: URL?
+var currentUserTripRole: TripMemberRole?
+var scheduleProgress: TripProgress?
+```
+
+Где использовать:
+
+- `TripsView`: `GET /trips`, `POST /trips`, `PATCH /trips`, `DELETE /trips`;
+- `TripCardView`: данные карточки из `TravelTrip`;
+- `TripEditorView`: create/update request;
+- `ContentView`: selected trip id;
+- `TripWorkspaceHeader`: `GET /trips/{trip_id}` при открытии.
+
+Create/update request mapping:
+
+| Поле формы `TripEditorView` | Backend request |
+|---|---|
+| `title` | `title` |
+| `startDate` | `starts_on` |
+| `endDate` | `ends_on` |
+| выбранные города | `cities` или `city_names`, в зависимости от OpenAPI request |
+| участники | `parties` или `participant_names`, в зависимости от OpenAPI request |
+
+Delete:
+
+- `DELETE /trips/{trip_id}` не удаляет физически;
+- после успеха вызвать `TripCatalogStore.deleteLocal(tripID:)`;
+- если удалили выбранную поездку, выбрать первую доступную или перейти в каталог.
+
+### Days: `GET /trips/{trip_id}/days`
+
+Swift DTO:
+
+```swift
+struct TripDayDTO: Decodable {
+    let id: UUID
+    let date: Date
+    let cityName: String?
+    let sortOrder: Int
+}
+```
+
+Текущий `TripDay.id` - `Int`, а backend id - UUID. Чтобы корректно редактировать данные, нужно добавить backend id:
+
+```swift
+struct TripDay {
+    var backendID: UUID?
+}
+```
+
+Mapping:
+
+| Backend | `TripDay` |
+|---|---|
+| `id` | `backendID` |
+| `sort_order` | `id` или отдельный `sortOrder` |
+| `date` | `date`, `dateKey` |
+| `city_name` | `city` |
+| `items` | заполняется после `GET /plan-items` |
+
+Где использовать:
+
+- `TripStore.loadTripWorkspace(tripID:)`;
+- `MonthCalendarView`;
+- `TimelineView`.
+
+### Plan items: list/create/update/delete
+
+Swift DTO:
+
+```swift
+struct PlanItemDTO: Decodable {
+    let id: UUID
+    let dayID: UUID
+    let title: String
+    let locationName: String?
+    let period: String?
+    let startsAt: Date?
+    let endsAt: Date?
+    let notes: String?
+    let hasTickets: Bool
+    let bookingReference: String?
+    let category: String?
+    let sortOrder: Int?
+}
+```
+
+Текущий `PlanItem.id` - `UUID`, его можно напрямую связать с backend `id`.
+
+Mapping:
+
+| Backend | `PlanItem` | Где отображается |
+|---|---|---|
+| `id` | `id` | `TimelinePlanCard`, editor |
+| `day_id` | день через `TripDay.backendID` | группировка по дням |
+| `title` | `title` | карточка события |
+| `location_name` | `city` или новое `locationName` | карточка/editor |
+| `category` | `PlanCategory` | иконка/цвет |
+| `period` | период fallback | блок дня |
+| `starts_at` | `startDate` + `startTime` | timeline |
+| `ends_at` | `endDate` + `endTime` | timeline |
+| `has_tickets` | `needsTicket` | ticket icon |
+| `ticket_bought` или ticket status | `ticketBought` | ticket icon |
+| `notes` | новое поле `notes` | будущие детали |
+| `booking_reference` | новое поле | будущие билеты |
+
+Что нужно добавить в модели:
+
+- `TripDay.backendID: UUID?`;
+- возможно `PlanItem.backendDayID: UUID?`;
+- `PlanItem.notes: String?`, если заметки нужны в UI;
+- mapper `period` между backend enum и русскими периодами.
+
+Где использовать:
+
+- `PlanTabView`: загрузка и отображение;
+- `MonthCalendarView`: дни и progress;
+- `TimelineView`: список событий;
+- `PlanItemEditorView`: create/update;
+- `TimelinePlanCard`: delete/edit.
+
+Write request mapping из `PlanItemEditorView`:
+
+| Поле editor | Backend request |
+|---|---|
+| `title` | `title` |
+| выбранный день | `day_id` |
+| `city/location` | `location_name` |
+| `category` | `category` |
+| `startDate + startTime` | `starts_at` |
+| `endDate + endTime` | `ends_at` |
+| `needsTicket` | `has_tickets` |
+| `ticketBought` | ticket status поле, если есть в DTO |
+
+После create/update/delete нужно перезапросить `GET /schedule-progress`.
+
+### Schedule progress: `GET /trips/{trip_id}/schedule-progress`
+
+Эта ручка должна заменить локальный расчет заполненности там, где нужен server truth.
+
+Mapping:
+
+| Backend | iOS |
+|---|---|
+| общий процент поездки | `TravelTrip.scheduleProgress` или `TripProgress` |
+| прогресс по дням | `TripDay.progress` или словарь `[dayID: progress]` |
+| прогресс по периодам | индикаторы в `MonthCalendarView`/future UI |
+
+Где использовать:
+
+- `TripProgressBar` в `Shared/AppStyle.swift`;
+- `EuropeTripStatusWidget` в `PlanViews.swift`;
+- `TripCardView` в `TripsViews.swift`, если карточка показывает прогресс;
+- `MonthCalendarView`, если нужны day indicators.
+
+### Expenses: list/create/update/delete
+
+Текущий `ExpenseItem` использует `Double amount` и имена участников. Backend использует `amount_minor` и ids участников. Для корректной интеграции нужно добавить связь с backend party id.
+
+Рекомендуемые изменения:
+
+```swift
+struct TripParticipant: Identifiable, Codable, Equatable {
+    let id: UUID
+    let displayName: String
+}
+```
+
+И в `TravelTrip`:
+
+```swift
+var partyIDsByName: [String: UUID]
+```
+
+Лучше полноценнее:
+
+```swift
+var participantsDetailed: [TripParticipant]
+```
+
+Expense DTO:
+
+```swift
+struct ExpenseDTO: Decodable {
+    let id: UUID
+    let title: String
+    let amountMinor: Int
+    let currency: String
+    let paidByPartyID: UUID
+    let spentAt: Date
+    let category: String?
+    let shares: [ExpenseShareDTO]
+}
+```
+
+Mapping:
+
+| Backend | `ExpenseItem` | Комментарий |
+|---|---|---|
+| `id` | `id` | UUID |
+| `trip_id` | `tripID` | UUID |
+| `title` | `title` | название |
+| `amount_minor` | `amount` | конвертировать в Decimal/Double для текущего UI |
+| `currency` | `ExpenseCurrency` | enum |
+| `paid_by_party_id` | `participantName` через participant lookup | лучше добавить `paidByPartyID` |
+| `shares[].party_id` | `involvedParticipantNames` через lookup | лучше добавить shares model |
+| `spent_at` | `createdAt` | дата |
+
+Что лучше поменять в iOS-модели:
+
+- заменить деньги с `Double` на `Decimal` или хранить `amountMinor: Int`;
+- добавить `paidByPartyID`;
+- добавить `shares: [ExpenseShare]`;
+- оставить `participantName` только как computed field для UI.
+
+Где использовать:
+
+- `ExpensesView`: загрузка и общий screen state;
+- `ExpenseEntryView`: create request;
+- `ExpenseRowView`: delete/edit;
+- `ExpenseTotalsView`: totals из backend или derived from expenses;
+- `ExpenseSplitView`: balances из `GET /balances`.
+
+После create/update/delete:
+
+1. обновить список расходов;
+2. вызвать `GET /balances`;
+3. обновить summary.
+
+### Balances: `GET /trips/{trip_id}/balances`
+
+Backend должен быть source of truth для балансов.
+
+Mapping:
+
+| Backend | iOS |
+|---|---|
+| `balances[].party_id` | найти participant display name |
+| `balances[].currency` | `ExpenseCurrency` |
+| `balances[].paid_minor` | `ExpenseBalance.paid` |
+| `balances[].share_minor` | `ExpenseBalance.share` |
+| `balances[].balance_minor` | `ExpenseBalance.balance` |
+| `settlements[].from_party_id` | `ExpenseSettlement.from` |
+| `settlements[].to_party_id` | `ExpenseSettlement.to` |
+| `settlements[].amount_minor` | `ExpenseSettlement.amount` |
+
+Где использовать:
+
+- `ExpenseTotalsView` для totals;
+- `ExpenseSplitView` для balances и settlements;
+- `ExpenseBalanceRow`;
+- `ExpenseSettlementRow`.
+
+Важно: если текущий UI принимает `Double`, mapper должен конвертировать minor units только в одном месте. Не размазывать деление на 100 по экранам.
+
+### Widget: `GET /trips/{trip_id}/widget`
+
+Mapping зависит от текущей модели widget extension. Цель - сохранить готовый компактный JSON в App Group.
+
+Где добавлять:
+
+- новый `WidgetRepository.swift`;
+- код записи в App Group можно держать в `WidgetCacheWriter.swift`;
+- вызов из `TripWorkspaceView.onAppear`, после изменения plan item и после изменения expense.
+
+Что писать в App Group:
+
+- trip title;
+- date range;
+- next plan item;
+- progress;
+- expenses summary, если нужен в widget;
+- `updatedAt`.
+
+Widget extension читает только файл/cache и не использует `APIClient`.
+
+### Import local data: `POST /import/local-data`
+
+Где использовать:
+
+- `AuthStore` после первого успешного login;
+- отдельный `ImportRepository.swift`;
+- локальные данные брать из `TripCatalogStore`, `TripStore`, `ExpenseStore`.
+
+Mapping:
+
+| Локальная модель | Backend import |
+|---|---|
+| `TravelTrip` | trip payload |
+| `TripDay` | days payload |
+| `PlanItem` | plan items payload |
+| `ExpenseItem` | expenses payload |
+| participants names | parties payload |
+
+После успешного импорта:
+
+- сохранить backend ids в локальные модели;
+- обновить stores через обычные `GET /trips`, `GET /days`, `GET /plan-items`, `GET /expenses`;
+- поставить локальный флаг, что импорт выполнен.
+
 ## Базовый URL и окружения
 
 Локально backend запускается на:
