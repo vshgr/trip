@@ -1,27 +1,34 @@
 import SwiftUI
 
-struct TripsTabBar: View {
-    let isShowingTrips: Bool
+struct AppRootTabBar: View {
+    @Binding var selectedSection: AppRootSection
     let onTripsTap: () -> Void
 
     var body: some View {
-        Button {
-            onTripsTap()
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: "suitcase")
-                    .font(.system(size: 20, weight: .semibold))
+        HStack(spacing: 0) {
+            ForEach(AppRootSection.allCases) { section in
+                Button {
+                    selectedSection = section
+                    if section == .trips {
+                        onTripsTap()
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: section.systemImage)
+                            .font(.system(size: 20, weight: .semibold))
 
-                Text("Поездки")
-                    .font(.caption2.weight(.semibold))
+                        Text(section.title)
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(selectedSection == section ? AppColors.accent : AppColors.muted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 9)
+                    .padding(.bottom, 7)
+                    .background(Color.white)
+                }
+                .buttonStyle(.plain)
             }
-            .foregroundStyle(isShowingTrips ? AppColors.accent : AppColors.muted)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 9)
-            .padding(.bottom, 7)
-            .background(Color.white)
         }
-        .buttonStyle(.plain)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(Color.black.opacity(0.08))
