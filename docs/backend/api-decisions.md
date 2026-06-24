@@ -1,11 +1,14 @@
-# API Decisions
+# Решения по API
 
-- Base path is `/api/v1`.
-- JSON fields use `snake_case`.
-- Success responses are wrapped in `{ "data": ... }`.
-- List responses include `{ "meta": { "next_cursor": null } }` when paginated.
-- Error responses are wrapped in `{ "error": ... }`.
-- Dates use `YYYY-MM-DD`.
-- Datetimes use RFC3339.
-- IDs are UUID strings.
-- Generated API DTOs must be mapped to domain models and not passed directly to SwiftUI views.
+- Базовый путь API: `/api/v1`.
+- Формат данных: JSON.
+- Имена полей: `snake_case`, чтобы контракт был одинаковым для Go, Swift DTO и OpenAPI.
+- Успешные ответы заворачиваются в `{ "data": ... }`.
+- Списки могут дополнительно возвращать `{ "meta": { "next_cursor": null } }`.
+- Ошибки заворачиваются в `{ "error": ... }`.
+- Даты поездки и дней маршрута передаются как `YYYY-MM-DD`.
+- Даты-время передаются в RFC3339.
+- Все серверные идентификаторы являются UUID-строками.
+- DTO из API не должны напрямую становиться SwiftUI view models. В iOS лучше держать отдельные DTO, мапперы и доменные модели.
+- Удаление поездок, элементов плана и расходов выполняется мягко через `deleted_at`, а не физическим `DELETE`.
+- Деньги хранятся только в minor units: копейки/центы в `amount_minor`, без `Double`.

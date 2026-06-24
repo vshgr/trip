@@ -1,19 +1,24 @@
-# ADR 0001: Modular Monolith
+# ADR 0001: Модульный монолит
 
-## Status
+## Статус
 
-Accepted
+Принято.
 
-## Decision
+## Решение
 
-Build the backend as a Go modular monolith.
+Backend строится как Go modular monolith.
 
-## Context
+## Контекст
 
-The product is early, the domain is tightly coupled, and the team is small. Microservices would add deployment and data-consistency complexity without clear benefit.
+Продукт ранний, команда небольшая, а домены тесно связаны: поездки, маршрут, расходы, участники, авторизация и виджет работают с одной моделью данных.
 
-## Consequences
+## Обоснование
 
-- One deployable API process.
-- One PostgreSQL database.
-- Internal module boundaries are kept so modules can be split later if the product requires it.
+Модульный монолит проще запускать, тестировать и деплоить. Одна база PostgreSQL позволяет использовать обычные транзакции. Внутренние модульные границы сохраняют порядок в коде и оставляют возможность выделить отдельные сервисы позже.
+
+## Последствия
+
+- Один backend-процесс.
+- Одна PostgreSQL-база.
+- Меньше инфраструктурной сложности.
+- Важно следить за границами модулей внутри кода.

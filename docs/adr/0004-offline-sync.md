@@ -1,20 +1,20 @@
-# ADR 0004: Offline Sync
+# ADR 0004: Offline и синхронизация
 
-## Status
+## Статус
 
-Accepted
+Принято.
 
-## Decision
+## Решение
 
-Use optimistic concurrency and idempotent client IDs for the first sync version.
+Для первой версии используется простой подход: backend как источник истины, локальные данные iOS как cache, сущности имеют `version`, а импорт локальных данных идет отдельным endpoint.
 
-## Context
+## Обоснование
 
-The iOS app is local-first today. A full CRDT-based sync engine is too large for the first backend iteration.
+Полноценный CRDT/sync-engine слишком большой для первого этапа. Сейчас важнее подключить backend, сохранить локальную отзывчивость iOS и не сломать WidgetKit.
 
-## Consequences
+## Последствия
 
-- Mutable entities have `version`.
-- Clients send `expected_version`.
-- Creates may include `client_id`.
-- Conflicts return HTTP 409 `VERSION_CONFLICT`.
+- Mutable-сущности имеют `version`.
+- UserDefaults остается cache-слоем.
+- Конфликты версий в будущем должны возвращать `409 VERSION_CONFLICT`.
+- Widget продолжает читать App Group cache.

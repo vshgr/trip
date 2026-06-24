@@ -1,14 +1,19 @@
-# ADR 0002: OpenAPI First
+# ADR 0002: OpenAPI как контракт
 
-## Status
+## Статус
 
-Accepted
+Принято.
 
-## Decision
+## Решение
 
-Maintain `backend/api/openapi.yaml` as the API contract before wiring generated transport types.
+Файл `backend/api/openapi.yaml` является основным контрактом между backend и iOS.
 
-## Consequences
+## Обоснование
 
-- iOS and backend can agree on DTOs before implementation details.
-- Generated server and Swift client code can be introduced without replacing domain models.
+iOS-интеграция требует понятных request/response-схем до того, как UI будет полностью переведен на backend. OpenAPI позволяет смотреть контракт в Swagger UI, генерировать DTO и синхронизировать backend/iOS без догадок.
+
+## Последствия
+
+- Swagger UI запускается локально на `http://localhost:8081`.
+- Любое изменение API должно отражаться в `openapi.yaml`.
+- DTO не должны напрямую заменять доменные модели iOS.

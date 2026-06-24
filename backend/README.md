@@ -1,189 +1,168 @@
 # Trip Backend
 
-Go backend for the Trip iOS app. The backend is being added as a modular monolith in the existing iOS repository without changing the Xcode project.
+Backend для iOS-приложения Trip. Он добавлен в существующий iOS-репозиторий как Go-сервис, не меняя Xcode-проект.
 
-## Architecture
+## Как запустить
 
-- HTTP transport: `net/http` for Stage 1.
-- Application modules: identity, trips, itinerary, expenses, widgets, receipts.
-- Domain logic lives under each module's `domain` package.
-- Persistence will use PostgreSQL migrations and sqlc-generated query code in later stages.
-- API responses use `{ "data": ... }` and `{ "error": ... }` envelopes.
-
-Stage 1 intentionally keeps runtime dependencies minimal. Use the system Go toolchain installed from `go.dev`.
-
-## Local Go Setup
-
-Install Go for macOS Apple Silicon from `https://go.dev/dl/`, then check:
+Самый простой способ локального запуска:
 
 ```bash
-go version
-```
-
-If `go` is installed but not found, add it to your zsh path:
-
-```bash
-echo 'export PATH="/usr/local/go/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-go version
-```
-
-## Run
-
-The API now requires PostgreSQL. The easiest local path is Docker Compose:
-
-```bash
-cd backend
+cd /Users/d.a.tasbauova/Documents/trip/backend
 docker compose up --build
 ```
 
-API:
+После запуска доступны:
 
-- `GET http://localhost:8080/health/live`
-- `GET http://localhost:8080/health/ready`
-- `POST http://localhost:8080/api/v1/auth/register`
-- `POST http://localhost:8080/api/v1/auth/login`
-- `POST http://localhost:8080/api/v1/auth/yandex`
-- `GET http://localhost:8080/api/v1/trips`
-- `POST http://localhost:8080/api/v1/trips`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/days`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/plan-items`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/schedule-progress`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/expenses`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/balances`
-- `GET http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/widget`
+- API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8081`
+- PostgreSQL: `localhost:5432`
 
-Docker Compose starts:
-
-- `postgres` on `localhost:5432`;
-- `migrate`, which applies `db/migrations/*.up.sql`;
-- `api` on `localhost:8080`.
-
-If you already have PostgreSQL running locally:
+Остановить:
 
 ```bash
-cd backend
-make migrate
-make run
-```
-
-You can also run from the repository root:
-
-```bash
-scripts/backend-run-local.sh
-```
-
-## Database
-
-Local Docker credentials:
-
-- database: `trip`
-- user: `trip`
-- password: `trip`
-- URL: `postgres://trip:trip@localhost:5432/trip?sslmode=disable`
-- JDBC URL for DBeaver: `jdbc:postgresql://localhost:5432/trip`
-
-Migrations are plain SQL files under `db/migrations`. Applied versions are recorded in `schema_migrations`.
-
-The seed migration `000002_seed_europe_trip` creates a demo trip, route days, plan items, trip parties, expenses, and expense shares. This data is intended for local API and iOS integration checks.
-
-Useful commands:
-
-```bash
-cd backend
-docker compose up -d postgres
-make migrate
-make run
 docker compose down
 ```
 
-To inspect data in DBeaver, start Docker Compose first, then create a PostgreSQL connection with:
+Остановить и удалить локальные данные PostgreSQL:
+
+```bash
+docker compose down --volumes
+```
+
+## Swagger
+
+Swagger UI запускается вместе с Docker Compose:
+
+```bash
+cd /Users/d.a.tasbauova/Documents/trip/backend
+docker compose up --build
+```
+
+Открой в браузере:
+
+```text
+http://localhost:8081
+```
+
+Контракт лежит здесь:
+
+```text
+backend/api/openapi.yaml
+```
+
+Swagger содержит русские описания методов, request/response-схемы, enum-значения и назначение каждого endpoint.
+
+## База данных
+
+Локальный PostgreSQL запускается в Docker.
+
+Данные для DBeaver:
 
 - Host: `localhost`
 - Port: `5432`
 - Database: `trip`
 - Username: `trip`
 - Password: `trip`
+- JDBC URL: `jdbc:postgresql://localhost:5432/trip`
 
-## Environment
+Миграции находятся в `backend/db/migrations`. Примененные версии хранятся в таблице `schema_migrations`.
 
-Copy `.env.example` and override values for local or production environments.
+Seed-миграция `000002_seed_europe_trip` создает демо-поездку:
 
-Important variables:
-
-- `HTTP_PORT`
-- `HTTP_READ_TIMEOUT`
-- `HTTP_WRITE_TIMEOUT`
-- `HTTP_IDLE_TIMEOUT`
-- `HTTP_SHUTDOWN_TIMEOUT`
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `LOG_LEVEL`
-
-## Migrations
-
-Migration files live in `db/migrations`.
-
-The initial schema creates users, sessions, trips, cities, members, guest parties, days, plan items, expenses, shares, receipts, and receipt items.
-
-## Tests
-
-```bash
-cd backend
-make test
+```text
+7a835df2-a238-4c4b-9f36-5da11a42b40e
 ```
 
-Current unit tests cover:
+## Архитектура
 
-- health router behavior;
-- schedule occupancy interval union/clipping;
-- integer equal-split remainder distribution.
-- supported currencies matching the current iOS app: RUB, EUR, USD, KZT, JPY.
+Выбран Go modular monolith:
 
-## Endpoints
+- один backend-процесс проще запускать, деплоить и отлаживать на ранней стадии продукта;
+- домены поездок, маршрута, расходов, пользователей и виджета тесно связаны;
+- микросервисы сейчас добавили бы сетевую сложность, распределенные транзакции и лишнюю DevOps-нагрузку;
+- внутренние границы модулей сохраняются, поэтому при росте продукта части можно будет выделить позже.
 
-Implemented:
+Текущие слои:
 
-- `GET /health/live`
-- `GET /health/ready`
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/yandex`
-- `GET /api/v1/me`
-- `PATCH /api/v1/me`
-- `GET /api/v1/trips`
-- `POST /api/v1/trips`
-- `GET /api/v1/trips/{trip_id}`
-- `PATCH /api/v1/trips/{trip_id}`
-- `DELETE /api/v1/trips/{trip_id}`
-- `GET /api/v1/trips/{trip_id}/days`
-- `GET /api/v1/trips/{trip_id}/plan-items`
-- `POST /api/v1/trips/{trip_id}/plan-items`
-- `PATCH /api/v1/trips/{trip_id}/plan-items/{item_id}`
-- `DELETE /api/v1/trips/{trip_id}/plan-items/{item_id}`
-- `GET /api/v1/trips/{trip_id}/schedule-progress`
-- `GET /api/v1/trips/{trip_id}/expenses`
-- `POST /api/v1/trips/{trip_id}/expenses`
-- `PATCH /api/v1/trips/{trip_id}/expenses/{expense_id}`
-- `DELETE /api/v1/trips/{trip_id}/expenses/{expense_id}`
-- `GET /api/v1/trips/{trip_id}/balances`
-- `GET /api/v1/trips/{trip_id}/widget`
-- `POST /api/v1/import/local-data`
+- `cmd/api`: запуск HTTP API;
+- `cmd/migrate`: запуск SQL-миграций;
+- `internal/platform`: конфиг, база, HTTP helpers, middleware, logging;
+- `internal/itinerary/domain`: доменная логика расписания;
+- `internal/expenses/domain`: доменная логика денег и валют;
+- `db/migrations`: структура PostgreSQL и seed-данные;
+- `api/openapi.yaml`: публичный контракт для iOS.
 
-Planned API resources are defined in `api/openapi.yaml`.
+## Soft delete
 
-See `../docs/backend/api-status.md` for the current implementation status.
-See `../docs/backend/local-checks.md` for manual curl checks.
-See `../docs/backend/yandex-id.md` for Yandex ID integration notes.
+Удаление поездки реализовано мягко:
+
+```http
+DELETE /api/v1/trips/{trip_id}
+```
+
+Запись не удаляется из PostgreSQL физически. Backend выставляет `deleted_at`, обновляет `updated_at` и увеличивает `version`. Это нужно, чтобы позже добавить восстановление поездки и не терять пользовательские данные.
+
+Такой же подход используется для plan items и expenses.
+
+## Роли и права
+
+Есть два уровня ролей.
+
+Системная роль пользователя:
+
+- `admin`: администрирование системы, будущая модерация/поддержка;
+- `user`: обычный пользователь приложения.
+
+Роль внутри конкретной поездки:
+
+- `owner`: владелец поездки;
+- `editor`: может редактировать маршрут и расходы;
+- `viewer`: только просмотр.
+
+Почему роли разделены: `admin/user` отвечает за права в системе целиком, а `owner/editor/viewer` отвечает за доступ к конкретной поездке. Один и тот же пользователь может быть обычным `user`, но `owner` в одной поездке и `viewer` в другой.
+
+## Яндекс ID
+
+Backend уже содержит endpoint:
+
+```http
+POST /api/v1/auth/yandex
+```
+
+iOS получает OAuth token через Yandex LoginSDK и отправляет его backend. Backend проверяет токен через Яндекс, создает или находит пользователя, связывает аккаунт и выдает backend `access_token`/`refresh_token`.
+
+Подробный план: `docs/backend/yandex-id.md`.
+
+## Документация
+
+- `docs/backend/swagger.md`: как запустить и использовать Swagger.
+- `docs/backend/local-checks.md`: ручная проверка backend.
+- `docs/backend/architecture.md`: архитектура и обоснование.
+- `docs/backend/domain-model.md`: доменная модель.
+- `docs/backend/roles-and-permissions.md`: роли и права.
+- `docs/backend/yandex-id.md`: план подключения Яндекс ID.
+- `docs/backend/migration-plan.md`: миграция iOS с UserDefaults.
 
 ## Vendor
 
-`vendor/` is committed so Docker builds can run without downloading Go modules from `proxy.golang.org`. This helps in networks or Docker environments with TLS/proxy issues. If Docker can access `proxy.golang.org` normally, the project can be switched back to online module downloads by removing `vendor/` and dropping `-mod=vendor` from the Docker build.
+`vendor/` закоммичен специально. У локального Docker сейчас есть TLS-проблема при обращении к `proxy.golang.org`, поэтому сборка без `vendor/` может падать.
 
-## Troubleshooting
+Для виртуального сервера это не проблема: `vendor/` делает сборку более воспроизводимой и менее зависимой от внешней сети. Минус только в размере репозитория. Когда CI/CD или сервер будут нормально ходить в Go proxy с корректными сертификатами, можно будет убрать `vendor/` и вернуть обычную загрузку модулей.
 
-- If `/health/ready` returns 503, check `DATABASE_URL`.
-- If local `go` is missing, install Go from `go.dev/dl` or add `/usr/local/go/bin` to `PATH`.
+## Проверка
+
+Тесты:
+
+```bash
+cd /Users/d.a.tasbauova/Documents/trip/backend
+make test
+```
+
+Быстрая проверка API:
+
+```bash
+curl http://localhost:8080/health/ready
+curl http://localhost:8080/api/v1/trips
+```
+
+Подробные команды проверки: `docs/backend/local-checks.md`.

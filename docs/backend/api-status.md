@@ -1,65 +1,39 @@
-# Backend API Status
+# Статус Backend API
 
-## Implemented
+## Реализовано
 
-- `GET /health/live`
-- `GET /health/ready`
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/yandex`
-- `GET /api/v1/me`
-- `PATCH /api/v1/me`
-- `GET /api/v1/trips`
-- `POST /api/v1/trips`
-- `GET /api/v1/trips/{trip_id}`
-- `PATCH /api/v1/trips/{trip_id}`
-- `DELETE /api/v1/trips/{trip_id}`
-- `GET /api/v1/trips/{trip_id}/days`
-- `GET /api/v1/trips/{trip_id}/plan-items`
-- `POST /api/v1/trips/{trip_id}/plan-items`
-- `PATCH /api/v1/trips/{trip_id}/plan-items/{item_id}`
-- `DELETE /api/v1/trips/{trip_id}/plan-items/{item_id}`
-- `GET /api/v1/trips/{trip_id}/schedule-progress`
-- `GET /api/v1/trips/{trip_id}/expenses`
-- `POST /api/v1/trips/{trip_id}/expenses`
-- `PATCH /api/v1/trips/{trip_id}/expenses/{expense_id}`
-- `DELETE /api/v1/trips/{trip_id}/expenses/{expense_id}`
-- `GET /api/v1/trips/{trip_id}/balances`
-- `GET /api/v1/trips/{trip_id}/widget`
-- `POST /api/v1/import/local-data`
+- Health: `GET /health/live`, `GET /health/ready`.
+- Auth: local register/login/refresh/logout, `GET/PATCH /api/v1/me`, вход через `POST /api/v1/auth/yandex`.
+- Trips: список, создание, чтение, обновление, мягкое удаление.
+- Itinerary: дни маршрута, список/создание/обновление/мягкое удаление plan items, расчет заполненности расписания.
+- Expenses: список/создание/обновление/мягкое удаление расходов, доли участников, балансы, упрощенные переводы.
+- Widget: агрегированная read model для iOS WidgetKit.
+- Import: базовый импорт локальных поездок.
 
-`/health/ready` uses a real PostgreSQL connection through `pgxpool`.
+## Seed-данные
 
-Trip, itinerary, expense, balance, widget, auth, and import endpoints use real PostgreSQL data.
+Миграция `backend/db/migrations/000002_seed_europe_trip.up.sql` создает демо-поездку:
 
-## Seed Data
+```text
+7a835df2-a238-4c4b-9f36-5da11a42b40e
+```
 
-The migration `backend/db/migrations/000002_seed_europe_trip.up.sql` creates local demo data:
+В seed входят города, 19 дней маршрута, plan items, 4 гостевых участника и демо-расходы в EUR/RUB.
 
-- demo trip: `7a835df2-a238-4c4b-9f36-5da11a42b40e`;
-- cities: Barcelona, Ibiza, Nice, Paris, Brussels, Amsterdam;
-- 19 trip days from `2026-07-03` to `2026-07-21`;
-- initial itinerary plan items;
-- four trip parties and sample expenses in EUR and RUB.
+## Инфраструктура
 
-## Infrastructure Ready
+- PostgreSQL запускается через Docker Compose.
+- Миграции применяет `cmd/migrate`.
+- OpenAPI-контракт находится в `backend/api/openapi.yaml`.
+- Swagger UI запускается на `http://localhost:8081`.
+- Связки Яндекс ID хранятся в `user_identity_providers`.
+- Системная роль пользователя хранится в `users.role`.
 
-- PostgreSQL schema migration runner: `cmd/migrate`.
-- Docker Compose services: `postgres`, `migrate`, `api`.
-- Initial schema for identity, trips, itinerary, expenses, widgets read model inputs, and receipts.
-- Yandex ID account links through `user_identity_providers`.
+## Следующие продуктовые шаги
 
-## Contracted But Not Implemented Yet
-
-The routes below are not part of the current OpenAPI contract yet, but are likely next product needs:
-
-- Trip invitations and member roles.
-- Receipt upload and receipt item assignment.
-- Expense summaries by category/date.
-- Hard authorization checks for every trip membership.
-
-## Next Implementation Step
-
-Connect the iOS app to Yandex LoginSDK and pass the Yandex OAuth token to `POST /api/v1/auth/yandex`.
+- Подключить iOS к Swagger/OpenAPI DTO.
+- Добавить Yandex LoginSDK в iOS и отправлять OAuth token на backend.
+- Включить обязательную авторизацию для write endpoints.
+- Добавить проверку membership-прав для каждой поездки.
+- Добавить восстановление мягко удаленной поездки.
+- Позже добавить приглашения, роли участников поездки в UI, receipts/OCR и статистику расходов.

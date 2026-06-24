@@ -1,15 +1,19 @@
-# Local Backend Checks
+# Локальная проверка Backend
 
-## Start
+## Запуск
 
 ```bash
 cd /Users/d.a.tasbauova/Documents/trip/backend
 docker compose up --build
 ```
 
-API: `http://localhost:8080`
+Адреса:
 
-PostgreSQL for DBeaver:
+- API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8081`
+- PostgreSQL: `localhost:5432`
+
+## DBeaver
 
 - Host: `localhost`
 - Port: `5432`
@@ -24,9 +28,21 @@ curl http://localhost:8080/health/live
 curl http://localhost:8080/health/ready
 ```
 
-## Seed Trip
+## Swagger
 
-Demo trip id:
+Открой:
+
+```text
+http://localhost:8081
+```
+
+Swagger читает файл:
+
+```text
+backend/api/openapi.yaml
+```
+
+## Seed-поездка
 
 ```text
 7a835df2-a238-4c4b-9f36-5da11a42b40e
@@ -42,7 +58,7 @@ curl http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/bal
 curl http://localhost:8080/api/v1/trips/7a835df2-a238-4c4b-9f36-5da11a42b40e/widget
 ```
 
-## Auth
+## Создание пользователя
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/register \
@@ -50,14 +66,14 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
   -d '{"email":"demo-local@example.com","display_name":"Demo Local","password":"password123"}'
 ```
 
-Use the returned `access_token`:
+В ответе будет `access_token`. Его можно использовать так:
 
 ```bash
 curl http://localhost:8080/api/v1/me \
   -H 'Authorization: Bearer <access_token>'
 ```
 
-## Create Trip
+## Создание поездки
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/trips \
@@ -72,16 +88,21 @@ curl -X POST http://localhost:8080/api/v1/trips \
   }'
 ```
 
-Then use the returned `data.id` for `GET`, `PATCH`, and `DELETE`.
-
-## Stop
+## Мягкое удаление поездки
 
 ```bash
-cd /Users/d.a.tasbauova/Documents/trip/backend
+curl -X DELETE http://localhost:8080/api/v1/trips/<trip_id>
+```
+
+Запись останется в базе, но у нее появится `deleted_at`.
+
+## Остановка
+
+```bash
 docker compose down
 ```
 
-To remove all local database data and start from migrations again:
+Полная очистка локальной базы:
 
 ```bash
 docker compose down --volumes

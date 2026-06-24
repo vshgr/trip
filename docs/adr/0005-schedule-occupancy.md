@@ -1,19 +1,19 @@
-# ADR 0005: Schedule Occupancy
+# ADR 0005: Заполненность расписания
 
-## Status
+## Статус
 
-Accepted
+Принято.
 
-## Decision
+## Решение
 
-Backend schedule occupancy unions overlapping exact-time intervals before calculating occupied minutes.
+Backend считает `schedule_occupancy_percent` через объединение пересекающихся exact-time интервалов.
 
-## Context
+## Контекст
 
-The current iOS client sums intervals clipped to 08:00-23:00 and may double-count overlapping activities. Backend should preserve the concept of schedule occupancy while making the calculation mathematically correct.
+iOS раньше мог суммировать пересекающиеся интервалы и завышать занятость дня. Backend должен сохранить смысл метрики, но считать ее математически корректнее.
 
-## Consequences
+## Последствия
 
-- Occupancy remains distinct from completion.
-- `schedule_occupancy_percent` is calculated from exact-time activities only.
-- `completion_percent` is reserved for a future task-completion feature.
+- Заполненность расписания не равна прогрессу выполнения.
+- Учитываются только exact-time активности.
+- `completion_percent` зарезервирован для будущей функции выполнения задач.

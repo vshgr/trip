@@ -1,14 +1,15 @@
-# Yandex ID
+# План подключения Яндекс ID
 
-## Current Backend Flow
+## Целевая схема
 
-The backend exposes:
+1. Пользователь нажимает “Войти через Яндекс” в iOS.
+2. iOS открывает Yandex LoginSDK.
+3. SDK возвращает OAuth token.
+4. iOS отправляет token на backend:
 
-```text
+```http
 POST /api/v1/auth/yandex
 ```
-
-Request:
 
 ```json
 {
@@ -18,53 +19,46 @@ Request:
 }
 ```
 
-The backend calls Yandex ID user info API, finds or creates a local user, links the Yandex account in `user_identity_providers`, and returns the same response shape as local login:
+5. Backend запрашивает профиль пользователя у Яндекса.
+6. Backend создает или находит локального пользователя.
+7. Backend связывает пользователя с Яндекс ID в `user_identity_providers`.
+8. Backend возвращает свои `access_token` и `refresh_token`.
+9. iOS использует `Authorization: Bearer <access_token>`.
 
-```json
-{
-  "data": {
-    "access_token": "...",
-    "refresh_token": "...",
-    "token_type": "Bearer",
-    "expires_at": "...",
-    "user": {}
-  }
-}
-```
+## Что нужно сделать в Яндексе
 
-## What Is Needed In Yandex
+1. Создать OAuth-приложение.
+2. Добавить iOS platform.
+3. Указать Bundle ID и Team ID.
+4. Включить доступ к email и базовому профилю.
+5. Скопировать Client ID для iOS.
 
-1. Register an app in Yandex OAuth.
-2. Choose an app type intended for user authorization.
-3. Add the iOS platform and the exact iOS App ID: Apple Team ID plus Bundle ID.
-4. Enable Yandex ID permissions needed by the app:
-   - email;
-   - profile/login/name;
-   - avatar, optional.
-5. Copy the Client ID.
+Официальные страницы:
 
-Official docs:
+- регистрация приложения: `https://yandex.ru/dev/id/doc/ru/register-client`
+- iOS LoginSDK: `https://yandex.ru/dev/id/doc/ru/mobileauthsdk/ios/sdk-ios-main`
+- получение информации о пользователе: `https://yandex.ru/dev/id/doc/ru/user-information`
 
-- Registration: https://yandex.ru/dev/id/doc/ru/register-client
-- iOS LoginSDK: https://yandex.ru/dev/id/doc/ru/mobileauthsdk/ios/sdk-ios-main
-- User info endpoint: https://yandex.ru/dev/id/doc/ru/user-information
+## Что нужно сделать в iOS
 
-## What Is Needed In iOS
+1. Подключить Yandex LoginSDK.
+2. Сконфигурировать SDK через Client ID.
+3. Получить OAuth token после успешного входа.
+4. Отправить token на `POST /api/v1/auth/yandex`.
+5. Сохранить backend `access_token` и `refresh_token`.
+6. При `401 TOKEN_EXPIRED` вызывать `POST /api/v1/auth/refresh`.
 
-1. Add Yandex LoginSDK.
-2. Configure it with the Yandex OAuth Client ID.
-3. On successful login, get the Yandex OAuth token from the SDK.
-4. Send that token to `POST /api/v1/auth/yandex`.
-5. Store the backend `access_token` and `refresh_token`.
-6. Use `Authorization: Bearer <access_token>` for authenticated backend calls.
+## Что уже есть на backend
 
-## What Is Needed On Backend Deployment
+- Endpoint `POST /api/v1/auth/yandex`.
+- Проверка token через `https://login.yandex.ru/info?format=json`.
+- Создание пользователя, если его еще нет.
+- Связка Яндекс-аккаунта через `user_identity_providers`.
+- Выдача backend tokens.
 
-Backend does not need the Yandex client secret for this mobile-token flow. It verifies the token by requesting:
+## Что добавить перед production
 
-```text
-GET https://login.yandex.ru/info?format=json
-Authorization: OAuth <oauth_token>
-```
-
-The server must have outbound HTTPS access to `login.yandex.ru` and a valid system CA bundle.
+- Обязательную авторизацию для write endpoints.
+- Проверку membership-прав на каждую поездку.
+- Настройку HTTPS и production `JWT_SECRET`.
+- Логи без персональных токенов.

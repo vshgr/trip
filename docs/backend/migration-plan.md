@@ -1,38 +1,42 @@
-# UserDefaults Migration Plan
+# План миграции iOS с UserDefaults на Backend
 
-## Current Local Storage
+## Текущее локальное хранение
 
-- `trip.catalog.v1`
-- `trip.days.editable.v5.<trip_uuid>`
-- `trip.days.editable.v4`
-- `trip.expenses.v2`
-- `trip.expense.rates.v1`
-- `trip.expense.rates.date.v1`
-- App Group `trip.days.shared.europe`
+iOS сейчас хранит поездки, дни, план и расходы в `UserDefaults` и App Group cache для виджета.
 
-## Import
+Ключевые данные:
 
-`POST /api/v1/import/local-data` imports trips, cities, guest parties, days, plan items, expenses, and shares in one transaction.
+- каталог поездок;
+- дни маршрута;
+- plan items;
+- расходы;
+- курсы валют;
+- данные виджета.
 
-## Local IDs
+## Цель миграции
 
-- Keep local trip/item/expense UUIDs as `client_id`.
-- Store `TripDay.id: Int` as import metadata or resolve by `dateKey`.
-- Return server UUID mappings to the client.
+Backend должен стать источником истины, а локальное хранилище iOS должно остаться cache-слоем для быстрого открытия приложения, offline-режима и WidgetKit.
 
-## Guest Participants
+## Импорт
 
-Local participants are strings. Import them as `trip_parties`, not fake users.
+Endpoint:
 
-The current default trip seeds `Алиса`, `Яна`, `Уля`, and `Маша` as guest parties. Demo expenses should be treated as local data unless the client marks them differently in a future migration flag.
+```http
+POST /api/v1/import/local-data
+```
 
-## Rollback
+Он принимает массив поездок и создает серверные сущности. Для первой интеграции поддерживается базовая структура: поездка, города, гостевые участники и дни.
 
-If import fails, the server transaction rolls back and the iOS app keeps using local UserDefaults unchanged.
+## Фазы
 
-## Phases
+1. iOS читает данные с backend, но локальное хранение остается.
+2. Пользователь входит через Яндекс ID.
+3. iOS импортирует локальные поездки на backend.
+4. Backend становится источником истины.
+5. UserDefaults остается cache для offline и WidgetKit.
 
-1. Backend runs separately; iOS remains local-first.
-2. Login enables import of local data.
-3. Server becomes source of truth; UserDefaults is cache.
-4. Stores move behind repository protocols.
+## Важные правила
+
+- Локальные UUID можно передавать как `client_id` в будущей версии import.
+- Гостевые участники остаются `trip_parties`, а не создаются как fake users.
+- При ошибке import backend должен откатить транзакцию, а iOS продолжит работать на локальных данных.

@@ -60,14 +60,14 @@ func (h *AuthHandlers) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err = h.db.Exec(r.Context(), `
-INSERT INTO users (id, email, display_name, password_hash, avatar_url, created_at, updated_at)
-VALUES ($1, $2, $3, $4, NULL, $5, $5)`, userID, req.Email, req.DisplayName, passwordHash, now)
+INSERT INTO users (id, email, display_name, role, password_hash, avatar_url, created_at, updated_at)
+VALUES ($1, $2, $3, 'user', $4, NULL, $5, $5)`, userID, req.Email, req.DisplayName, passwordHash, now)
 	if err != nil {
 		WriteError(w, http.StatusConflict, "CONFLICT", "User already exists", RequestIDFromContext(r.Context()))
 		return
 	}
 
-	response, err := h.issueSession(r.Context(), userID, req.Email, req.DisplayName, req.DeviceID, req.DeviceName)
+	response, err := h.issueSession(r.Context(), userID, req.Email, req.DisplayName, "user", req.DeviceID, req.DeviceName)
 	if err != nil {
 		writeInternalError(w, r)
 		return
@@ -84,9 +84,9 @@ func (h *AuthHandlers) login(w http.ResponseWriter, r *http.Request) {
 
 	var user authUser
 	err := h.db.QueryRow(r.Context(), `
-SELECT id::text, email::text, display_name, password_hash
+SELECT id::text, email::text, display_name, role, password_hash
 FROM users
-WHERE email = $1`, req.Email).Scan(&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash)
+WHERE email = $1`, req.Email).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		WriteError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password", RequestIDFromContext(r.Context()))
 		return
@@ -96,7 +96,7 @@ WHERE email = $1`, req.Email).Scan(&user.ID, &user.Email, &user.DisplayName, &us
 		return
 	}
 
-	response, err := h.issueSession(r.Context(), user.ID, user.Email, user.DisplayName, req.DeviceID, req.DeviceName)
+	response, err := h.issueSession(r.Context(), user.ID, user.Email, user.DisplayName, user.Role, req.DeviceID, req.DeviceName)
 	if err != nil {
 		writeInternalError(w, r)
 		return
@@ -114,7 +114,7 @@ func (h *AuthHandlers) refresh(w http.ResponseWriter, r *http.Request) {
 	var sessionID string
 	var user authUser
 	err := h.db.QueryRow(r.Context(), `
-SELECT s.id::text, u.id::text, u.email::text, u.display_name, u.password_hash
+SELECT s.id::text, u.id::text, u.email::text, u.display_name, u.role, u.password_hash
 FROM user_sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()`, refreshHash).Scan(
@@ -122,6 +122,7 @@ WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now(
 		&user.ID,
 		&user.Email,
 		&user.DisplayName,
+		&user.Role,
 		&user.PasswordHash,
 	)
 	if err != nil {
@@ -130,7 +131,7 @@ WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now(
 	}
 
 	_, _ = h.db.Exec(r.Context(), "UPDATE user_sessions SET revoked_at = now() WHERE id = $1", sessionID)
-	response, err := h.issueSession(r.Context(), user.ID, user.Email, user.DisplayName, "", "")
+	response, err := h.issueSession(r.Context(), user.ID, user.Email, user.DisplayName, user.Role, "", "")
 	if err != nil {
 		writeInternalError(w, r)
 		return
@@ -170,7 +171,7 @@ func (h *AuthHandlers) yandex(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, r)
 		return
 	}
-	response, err := h.issueSession(r.Context(), user.ID, user.Email, user.DisplayName, req.DeviceID, req.DeviceName)
+	response, err := h.issueSession(r.Context(), user.ID, user.Email, user.DisplayName, user.Role, req.DeviceID, req.DeviceName)
 	if err != nil {
 		writeInternalError(w, r)
 		return
@@ -204,10 +205,11 @@ func (h *AuthHandlers) updateMe(w http.ResponseWriter, r *http.Request) {
 UPDATE users
 SET display_name = $2, updated_at = now()
 WHERE id = $1
-RETURNING id::text, email::text, display_name, avatar_url`, user.ID, req.DisplayName).Scan(
+RETURNING id::text, email::text, display_name, role, avatar_url`, user.ID, req.DisplayName).Scan(
 		&user.ID,
 		&user.Email,
 		&user.DisplayName,
+		&user.Role,
 		&user.AvatarURL,
 	)
 	if err != nil {
@@ -225,9 +227,9 @@ func (h *AuthHandlers) currentUser(w http.ResponseWriter, r *http.Request) (MeRe
 	}
 	var user MeResponse
 	err = h.db.QueryRow(r.Context(), `
-SELECT id::text, email::text, display_name, avatar_url
+SELECT id::text, email::text, display_name, role, avatar_url
 FROM users
-WHERE id = $1`, claims.Subject).Scan(&user.ID, &user.Email, &user.DisplayName, &user.AvatarURL)
+WHERE id = $1`, claims.Subject).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.AvatarURL)
 	if err != nil {
 		WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "User not found", RequestIDFromContext(r.Context()))
 		return MeResponse{}, false
@@ -235,8 +237,8 @@ WHERE id = $1`, claims.Subject).Scan(&user.ID, &user.Email, &user.DisplayName, &
 	return user, true
 }
 
-func (h *AuthHandlers) issueSession(ctx context.Context, userID string, email string, displayName string, deviceID string, deviceName string) (AuthResponse, error) {
-	accessToken, expiresAt, err := h.accessToken(userID, email, displayName)
+func (h *AuthHandlers) issueSession(ctx context.Context, userID string, email string, displayName string, role string, deviceID string, deviceName string) (AuthResponse, error) {
+	accessToken, expiresAt, err := h.accessToken(userID, email, displayName, role)
 	if err != nil {
 		return AuthResponse{}, err
 	}
@@ -261,6 +263,7 @@ VALUES ($1, $2, $3, $4, NULL, $5, $6, now())`, sessionID, userID, tokenHash(refr
 			ID:          userID,
 			Email:       email,
 			DisplayName: displayName,
+			Role:        role,
 		},
 	}, nil
 }
@@ -268,10 +271,10 @@ VALUES ($1, $2, $3, $4, NULL, $5, $6, now())`, sessionID, userID, tokenHash(refr
 func (h *AuthHandlers) upsertYandexUser(ctx context.Context, profile yandexProfile) (authUser, error) {
 	var user authUser
 	err := h.db.QueryRow(ctx, `
-SELECT u.id::text, u.email::text, u.display_name, COALESCE(u.password_hash, '')
+SELECT u.id::text, u.email::text, u.display_name, u.role, COALESCE(u.password_hash, '')
 FROM user_identity_providers p
 JOIN users u ON u.id = p.user_id
-WHERE p.provider = 'yandex' AND p.provider_subject = $1`, profile.ID).Scan(&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash)
+WHERE p.provider = 'yandex' AND p.provider_subject = $1`, profile.ID).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.PasswordHash)
 	if err == nil {
 		_, _ = h.db.Exec(ctx, `
 UPDATE user_identity_providers
@@ -302,14 +305,14 @@ WHERE provider = 'yandex' AND provider_subject = $1`, profile.ID, profile.Email(
 	defer tx.Rollback(ctx)
 
 	err = tx.QueryRow(ctx, `
-SELECT id::text, email::text, display_name, COALESCE(password_hash, '')
+SELECT id::text, email::text, display_name, role, COALESCE(password_hash, '')
 FROM users
-WHERE email = $1`, email).Scan(&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash)
+WHERE email = $1`, email).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
-		user = authUser{ID: newUUID(), Email: email, DisplayName: displayName}
+		user = authUser{ID: newUUID(), Email: email, DisplayName: displayName, Role: "user"}
 		_, err = tx.Exec(ctx, `
-INSERT INTO users (id, email, display_name, password_hash, avatar_url, created_at, updated_at)
-VALUES ($1, $2, $3, NULL, $4, now(), now())`, user.ID, email, displayName, profile.AvatarURL())
+INSERT INTO users (id, email, display_name, role, password_hash, avatar_url, created_at, updated_at)
+VALUES ($1, $2, $3, 'user', NULL, $4, now(), now())`, user.ID, email, displayName, profile.AvatarURL())
 	}
 	if err != nil {
 		return authUser{}, err
@@ -358,13 +361,14 @@ func fetchYandexProfile(ctx context.Context, oauthToken string) (yandexProfile, 
 	return profile, nil
 }
 
-func (h *AuthHandlers) accessToken(userID string, email string, displayName string) (string, time.Time, error) {
+func (h *AuthHandlers) accessToken(userID string, email string, displayName string, role string) (string, time.Time, error) {
 	expiresAt := time.Now().UTC().Add(accessTokenTTL)
 	header := map[string]string{"alg": "HS256", "typ": "JWT"}
 	claims := accessClaims{
 		Subject:     userID,
 		Email:       email,
 		DisplayName: displayName,
+		Role:        role,
 		ExpiresAt:   expiresAt.Unix(),
 	}
 	headerJSON, err := json.Marshal(header)
@@ -508,6 +512,7 @@ type accessClaims struct {
 	Subject     string `json:"sub"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
 	ExpiresAt   int64  `json:"exp"`
 }
 
@@ -515,6 +520,7 @@ type authUser struct {
 	ID           string
 	Email        string
 	DisplayName  string
+	Role         string
 	PasswordHash string
 }
 
@@ -575,5 +581,6 @@ type MeResponse struct {
 	ID          string  `json:"id"`
 	Email       string  `json:"email"`
 	DisplayName string  `json:"display_name"`
+	Role        string  `json:"role"`
 	AvatarURL   *string `json:"avatar_url"`
 }

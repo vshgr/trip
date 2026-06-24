@@ -1,42 +1,78 @@
 openapi: 3.1.0
 info:
   title: Trip API
-  version: 0.1.0
-  summary: Backend API for the Trip iOS application.
+  version: 0.2.0
+  summary: API для iOS-приложения Trip.
+  description: >
+    Backend хранит поездки, дни маршрута, план, расходы, балансы, пользователей,
+    сессии и агрегированную модель для виджета. Все успешные ответы завернуты
+    в объект `data`, списки дополнительно могут содержать `meta.next_cursor`.
 servers:
   - url: http://localhost:8080
+    description: Локальный backend из Docker Compose
+tags:
+  - name: Health
+    description: Проверка доступности процесса и базы данных.
+  - name: Auth
+    description: Регистрация, вход, обновление сессии и Яндекс ID.
+  - name: Trips
+    description: Каталог поездок и основные свойства поездки.
+  - name: Itinerary
+    description: Дни маршрута и элементы плана.
+  - name: Expenses
+    description: Расходы, доли участников и балансы.
+  - name: Widgets
+    description: Агрегированные данные для WidgetKit.
+  - name: Migration
+    description: Импорт локальных данных из iOS UserDefaults.
 paths:
   /health/live:
     get:
       operationId: getLiveHealth
       tags: [Health]
+      summary: Проверить, что API-процесс запущен.
+      description: Используется для базовой проверки контейнера или процесса. Не проверяет PostgreSQL.
       responses:
         "200":
-          description: API process is alive.
+          description: API отвечает.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StatusResponse"
+                $ref: "#/components/schemas/StatusEnvelope"
   /health/ready:
     get:
       operationId: getReadyHealth
       tags: [Health]
+      summary: Проверить готовность API и PostgreSQL.
+      description: Возвращает `ready`, если backend может подключиться к базе данных.
       responses:
         "200":
-          description: API is ready to serve traffic.
+          description: API и база готовы.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StatusResponse"
+                $ref: "#/components/schemas/StatusEnvelope"
         "503":
           $ref: "#/components/responses/Error"
   /api/v1/auth/register:
     post:
       operationId: register
       tags: [Auth]
+      summary: Зарегистрировать локального пользователя.
+      description: Нужен для локальной разработки. Для production-входа предпочтителен Яндекс ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
       responses:
         "201":
-          description: User registered.
+          description: Пользователь создан, сессия выдана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthEnvelope"
         "400":
           $ref: "#/components/responses/Error"
         "409":
@@ -45,34 +81,85 @@ paths:
     post:
       operationId: login
       tags: [Auth]
+      summary: Войти по email и паролю.
+      description: Возвращает access token и refresh token для локального пользователя.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: User logged in.
+          description: Вход выполнен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthEnvelope"
         "401":
           $ref: "#/components/responses/Error"
   /api/v1/auth/refresh:
     post:
       operationId: refresh
       tags: [Auth]
+      summary: Обновить access token.
+      description: Старый refresh token отзывается, backend выдает новую пару access/refresh token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
       responses:
         "200":
-          description: Session refreshed.
+          description: Сессия обновлена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthEnvelope"
         "401":
           $ref: "#/components/responses/Error"
   /api/v1/auth/logout:
     post:
       operationId: logout
       tags: [Auth]
+      summary: Выйти из текущей refresh-сессии.
+      description: Отзывает refresh token. Access token живет до истечения короткого TTL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
       responses:
         "200":
-          description: Session revoked.
+          description: Refresh token отозван.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusEnvelope"
   /api/v1/auth/yandex:
     post:
       operationId: loginWithYandex
       tags: [Auth]
+      summary: Войти через Яндекс ID.
+      description: >
+        iOS получает OAuth token через Yandex LoginSDK и отправляет его backend.
+        Backend проверяет токен через Яндекс, создает или находит пользователя,
+        связывает Яндекс-аккаунт и возвращает backend tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/YandexAuthRequest"
       responses:
         "200":
-          description: Yandex OAuth token exchanged for backend tokens.
+          description: Яндекс-токен принят, backend-сессия создана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthEnvelope"
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -81,17 +168,37 @@ paths:
     get:
       operationId: getMe
       tags: [Auth]
+      summary: Получить текущего пользователя.
+      security:
+        - bearerAuth: []
       responses:
         "200":
-          description: Current user.
+          description: Текущий пользователь.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
         "401":
           $ref: "#/components/responses/Error"
     patch:
       operationId: updateMe
       tags: [Auth]
+      summary: Обновить профиль текущего пользователя.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeRequest"
       responses:
         "200":
-          description: User updated.
+          description: Профиль обновлен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -100,15 +207,33 @@ paths:
     get:
       operationId: listTrips
       tags: [Trips]
+      summary: Получить список поездок.
+      description: Возвращает только активные поездки, где `deleted_at IS NULL`.
       responses:
         "200":
-          description: Trip list.
+          description: Список поездок.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripSummaryListEnvelope"
     post:
       operationId: createTrip
       tags: [Trips]
+      summary: Создать поездку.
+      description: Создает поездку, города, гостевых участников и дни маршрута.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTripRequest"
       responses:
         "201":
-          description: Trip created.
+          description: Поездка создана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripEnvelope"
         "400":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}:
@@ -117,17 +242,35 @@ paths:
     get:
       operationId: getTrip
       tags: [Trips]
+      summary: Получить поездку.
+      description: Возвращает основные поля поездки, города и участников.
       responses:
         "200":
-          description: Trip details.
+          description: Поездка найдена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripEnvelope"
         "404":
           $ref: "#/components/responses/Error"
     patch:
       operationId: updateTrip
       tags: [Trips]
+      summary: Обновить поездку.
+      description: Обновляет название, даты и timezone. Увеличивает `version`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTripRequest"
       responses:
         "200":
-          description: Trip updated.
+          description: Поездка обновлена.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripEnvelope"
         "400":
           $ref: "#/components/responses/Error"
         "404":
@@ -135,9 +278,18 @@ paths:
     delete:
       operationId: deleteTrip
       tags: [Trips]
+      summary: Мягко удалить поездку.
+      description: >
+        Поездка не удаляется физически из базы. Backend выставляет `deleted_at`,
+        обновляет `updated_at` и увеличивает `version`. Это позволяет позже
+        добавить восстановление поездки.
       responses:
         "200":
-          description: Trip soft-deleted.
+          description: Поездка помечена удаленной.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusEnvelope"
         "404":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/days:
@@ -146,41 +298,72 @@ paths:
     get:
       operationId: listTripDays
       tags: [Itinerary]
+      summary: Получить дни маршрута.
+      description: Возвращает дни поездки в порядке `sort_order`.
       responses:
         "200":
-          description: Trip days.
+          description: Дни маршрута.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripDayListEnvelope"
   /api/v1/trips/{trip_id}/plan-items:
     parameters:
       - $ref: "#/components/parameters/TripID"
     get:
       operationId: listPlanItems
       tags: [Itinerary]
+      summary: Получить элементы плана.
+      description: Возвращает не удаленные элементы плана поездки.
       responses:
         "200":
-          description: Plan items.
+          description: Элементы плана.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanItemListEnvelope"
     post:
       operationId: createPlanItem
       tags: [Itinerary]
+      summary: Создать элемент плана.
+      description: Добавляет активность, переезд, прогулку, еду или другой элемент в конкретный день.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanItemRequest"
       responses:
         "201":
-          description: Plan item created.
+          description: Элемент плана создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanItemEnvelope"
         "400":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/plan-items/{item_id}:
     parameters:
       - $ref: "#/components/parameters/TripID"
-      - name: item_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/ItemID"
     patch:
       operationId: updatePlanItem
       tags: [Itinerary]
+      summary: Обновить элемент плана.
+      description: Частично обновляет поля элемента плана и увеличивает `version`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlanItemRequest"
       responses:
         "200":
-          description: Plan item updated.
+          description: Элемент плана обновлен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanItemEnvelope"
         "400":
           $ref: "#/components/responses/Error"
         "404":
@@ -188,9 +371,15 @@ paths:
     delete:
       operationId: deletePlanItem
       tags: [Itinerary]
+      summary: Мягко удалить элемент плана.
+      description: Выставляет `deleted_at`; запись остается в базе.
       responses:
         "200":
-          description: Plan item soft-deleted.
+          description: Элемент плана помечен удаленным.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusEnvelope"
         "404":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/schedule-progress:
@@ -199,41 +388,74 @@ paths:
     get:
       operationId: getScheduleProgress
       tags: [Itinerary]
+      summary: Получить заполненность расписания.
+      description: Считает занятые минуты по exact-time активностям и объединяет пересекающиеся интервалы.
       responses:
         "200":
-          description: Schedule progress.
+          description: Заполненность расписания по поездке и дням.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleProgressEnvelope"
   /api/v1/trips/{trip_id}/expenses:
     parameters:
       - $ref: "#/components/parameters/TripID"
     get:
       operationId: listExpenses
       tags: [Expenses]
+      summary: Получить расходы.
+      description: Возвращает не удаленные расходы с долями участников.
       responses:
         "200":
-          description: Expense list.
+          description: Расходы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseListEnvelope"
     post:
       operationId: createExpense
       tags: [Expenses]
+      summary: Создать расход.
+      description: >
+        Создает расход и доли участников. Если `shares` не переданы, backend
+        делит сумму поровну между всеми `trip_parties`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseRequest"
       responses:
         "201":
-          description: Expense created.
+          description: Расход создан.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseEnvelope"
         "400":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/expenses/{expense_id}:
     parameters:
       - $ref: "#/components/parameters/TripID"
-      - name: expense_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/ExpenseID"
     patch:
       operationId: updateExpense
       tags: [Expenses]
+      summary: Обновить расход.
+      description: Частично обновляет расход. Если переданы `shares`, они заменяют старые доли.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExpenseRequest"
       responses:
         "200":
-          description: Expense updated.
+          description: Расход обновлен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseEnvelope"
         "400":
           $ref: "#/components/responses/Error"
         "404":
@@ -241,9 +463,15 @@ paths:
     delete:
       operationId: deleteExpense
       tags: [Expenses]
+      summary: Мягко удалить расход.
+      description: Выставляет `deleted_at`; запись остается в базе для будущего восстановления или аудита.
       responses:
         "200":
-          description: Expense soft-deleted.
+          description: Расход помечен удаленным.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusEnvelope"
         "404":
           $ref: "#/components/responses/Error"
   /api/v1/trips/{trip_id}/balances:
@@ -252,56 +480,104 @@ paths:
     get:
       operationId: getBalances
       tags: [Expenses]
+      summary: Получить балансы.
+      description: Считает баланс каждого участника и упрощенные переводы отдельно по каждой валюте.
       responses:
         "200":
-          description: Balances.
+          description: Балансы и переводы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalancesEnvelope"
   /api/v1/trips/{trip_id}/widget:
     parameters:
       - $ref: "#/components/parameters/TripID"
     get:
       operationId: getTripWidget
       tags: [Widgets]
+      summary: Получить данные для виджета.
+      description: Агрегированная модель, которую iOS может сохранить в App Group cache для WidgetKit.
       responses:
         "200":
-          description: Widget read model.
+          description: Данные для виджета.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WidgetEnvelope"
   /api/v1/import/local-data:
     post:
       operationId: importLocalData
       tags: [Migration]
+      summary: Импортировать локальные данные iOS.
+      description: Импортирует массив поездок из локального хранилища iOS. Сейчас поддерживает базовую структуру поездки.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportLocalDataRequest"
       responses:
         "201":
-          description: Local data imported.
+          description: Данные импортированы.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportLocalDataEnvelope"
         "400":
           $ref: "#/components/responses/Error"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   parameters:
     TripID:
       name: trip_id
       in: path
       required: true
+      description: UUID поездки.
+      schema:
+        type: string
+        format: uuid
+    ItemID:
+      name: item_id
+      in: path
+      required: true
+      description: UUID элемента плана.
+      schema:
+        type: string
+        format: uuid
+    ExpenseID:
+      name: expense_id
+      in: path
+      required: true
+      description: UUID расхода.
       schema:
         type: string
         format: uuid
   responses:
     Error:
-      description: Error envelope.
+      description: Ошибка API.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
-    StatusResponse:
+    StatusEnvelope:
       type: object
       required: [data]
       properties:
         data:
-          type: object
-          required: [status]
-          properties:
-            status:
-              type: string
-              examples: [ok, ready]
-    ErrorResponse:
+          $ref: "#/components/schemas/Status"
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          examples: [ok, ready, deleted]
+    ErrorEnvelope:
       type: object
       required: [error]
       properties:
@@ -313,20 +589,7 @@ components:
       properties:
         code:
           type: string
-          enum:
-            - VALIDATION_ERROR
-            - UNAUTHORIZED
-            - FORBIDDEN
-            - NOT_FOUND
-            - CONFLICT
-            - VERSION_CONFLICT
-            - INVALID_CREDENTIALS
-            - TOKEN_EXPIRED
-            - TRIP_DATE_CONFLICT
-            - MEMBER_ALREADY_EXISTS
-            - EXPENSE_SHARES_MISMATCH
-            - INTERNAL_ERROR
-            - NOT_IMPLEMENTED
+          enum: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, VERSION_CONFLICT, INVALID_CREDENTIALS, TOKEN_EXPIRED, TRIP_DATE_CONFLICT, MEMBER_ALREADY_EXISTS, EXPENSE_SHARES_MISMATCH, INTERNAL_ERROR, NOT_IMPLEMENTED]
         message:
           type: string
         request_id:
@@ -334,10 +597,751 @@ components:
         details:
           type: array
           items:
-            type: object
-            required: [field, reason]
-            properties:
-              field:
+            $ref: "#/components/schemas/FieldError"
+    FieldError:
+      type: object
+      required: [field, reason]
+      properties:
+        field:
+          type: string
+        reason:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [email, display_name, password]
+      properties:
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        password:
+          type: string
+          minLength: 8
+        device_id:
+          type: string
+        device_name:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        device_id:
+          type: string
+        device_name:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    YandexAuthRequest:
+      type: object
+      required: [oauth_token]
+      properties:
+        oauth_token:
+          type: string
+          description: OAuth token, полученный iOS-приложением через Yandex LoginSDK.
+        device_id:
+          type: string
+        device_name:
+          type: string
+    UpdateMeRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+    AuthEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/AuthResponse"
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_at, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          examples: [Bearer]
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+    UserEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/User"
+    User:
+      type: object
+      required: [id, email, display_name, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        role:
+          $ref: "#/components/schemas/SystemRole"
+        avatar_url:
+          type: [string, "null"]
+          format: uri
+    SystemRole:
+      type: string
+      description: Системная роль пользователя.
+      enum: [admin, user]
+    TripSummaryListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripSummary"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+    TripEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Trip"
+    TripSummary:
+      type: object
+      required: [id, title, start_date, end_date, cities, member_count, schedule_occupancy_percent, expense_totals_by_currency, updated_at, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        cities:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripCity"
+        member_count:
+          type: integer
+        schedule_occupancy_percent:
+          type: integer
+        expense_totals_by_currency:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        approximate_total_rub:
+          type: [integer, "null"]
+          format: int64
+        nearest_activity:
+          anyOf:
+            - $ref: "#/components/schemas/NearestActivity"
+            - type: "null"
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+    Trip:
+      type: object
+      required: [id, title, start_date, end_date, cities, parties, version, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        timezone:
+          type: [string, "null"]
+        cities:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripCity"
+        parties:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripParty"
+        version:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TripCity:
+      type: object
+      required: [id, name, sort_order]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sort_order:
+          type: integer
+    TripParty:
+      type: object
+      required: [id, display_name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+    CreateTripRequest:
+      type: object
+      required: [title, start_date, end_date]
+      properties:
+        owner_id:
+          type: string
+          format: uuid
+          description: Опционально. Если не передан, используется demo user для локальной разработки.
+        title:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        timezone:
+          type: string
+          examples: [Europe/Moscow]
+        cities:
+          type: array
+          items:
+            type: string
+        parties:
+          type: array
+          items:
+            type: string
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripDayInput"
+    UpdateTripRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        timezone:
+          type: string
+    TripDayInput:
+      type: object
+      required: [date]
+      properties:
+        local_id:
+          type: string
+        date:
+          type: string
+          format: date
+        city:
+          type: string
+    TripDayListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TripDay"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+    TripDay:
+      type: object
+      required: [id, date, city, sort_order, schedule_occupancy_percent, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        local_id:
+          type: [string, "null"]
+        date:
+          type: string
+          format: date
+        city:
+          type: string
+        sort_order:
+          type: integer
+        schedule_occupancy_percent:
+          type: integer
+        version:
+          type: integer
+          format: int64
+    PlanItemListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanItem"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+    PlanItemEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/PlanItem"
+    PlanItem:
+      type: object
+      required: [id, source_day_id, title, city, category, schedule_type, sort_index, needs_ticket, ticket_bought, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_day_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        city:
+          type: string
+        category:
+          $ref: "#/components/schemas/PlanCategory"
+        schedule_type:
+          $ref: "#/components/schemas/ScheduleType"
+        period:
+          anyOf:
+            - $ref: "#/components/schemas/PlanPeriod"
+            - type: "null"
+        start_at:
+          type: [string, "null"]
+          format: date-time
+        end_at:
+          type: [string, "null"]
+          format: date-time
+        timezone:
+          type: [string, "null"]
+        sort_index:
+          type: integer
+        needs_ticket:
+          type: boolean
+        ticket_bought:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+    CreatePlanItemRequest:
+      type: object
+      required: [source_day_id, title]
+      properties:
+        source_day_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        city_id:
+          type: string
+          format: uuid
+        city:
+          type: string
+        category:
+          $ref: "#/components/schemas/PlanCategory"
+        schedule_type:
+          $ref: "#/components/schemas/ScheduleType"
+        period:
+          $ref: "#/components/schemas/PlanPeriod"
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        sort_index:
+          type: integer
+        needs_ticket:
+          type: boolean
+        ticket_bought:
+          type: boolean
+    UpdatePlanItemRequest:
+      type: object
+      description: Все поля опциональны; передаются только измененные значения.
+      properties:
+        source_day_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        city_id:
+          type: string
+          format: uuid
+        city:
+          type: string
+        category:
+          $ref: "#/components/schemas/PlanCategory"
+        schedule_type:
+          $ref: "#/components/schemas/ScheduleType"
+        period:
+          $ref: "#/components/schemas/PlanPeriod"
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        sort_index:
+          type: integer
+        needs_ticket:
+          type: boolean
+        ticket_bought:
+          type: boolean
+    PlanCategory:
+      type: string
+      enum: [transfer, rest, walk, sight, food, shopping]
+    ScheduleType:
+      type: string
+      enum: [exact, period, unscheduled]
+    PlanPeriod:
+      type: string
+      enum: [morning, afternoon, evening, night]
+    ScheduleProgressEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/ScheduleProgress"
+    ScheduleProgress:
+      type: object
+      required: [trip_percent, days]
+      properties:
+        trip_percent:
+          type: integer
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayScheduleProgress"
+    DayScheduleProgress:
+      type: object
+      required: [day_id, date, occupied_minutes, available_minutes, percent]
+      properties:
+        day_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        occupied_minutes:
+          type: integer
+        available_minutes:
+          type: integer
+        percent:
+          type: integer
+    ExpenseListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Expense"
+        meta:
+          $ref: "#/components/schemas/ListMeta"
+    ExpenseEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Expense"
+    Expense:
+      type: object
+      required: [id, title, amount_minor, currency, paid_by_party_id, paid_by_name, occurred_at, shares, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        paid_by_party_id:
+          type: string
+          format: uuid
+        paid_by_name:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseShare"
+        version:
+          type: integer
+          format: int64
+    CreateExpenseRequest:
+      type: object
+      required: [title, amount_minor, currency, paid_by_party_id]
+      properties:
+        title:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        paid_by_party_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        category:
+          type: string
+        note:
+          type: string
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseShareInput"
+    UpdateExpenseRequest:
+      type: object
+      description: Все поля опциональны; если передать `shares`, они полностью заменят старые доли.
+      properties:
+        title:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        paid_by_party_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        category:
+          type: string
+        note:
+          type: string
+        shares:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseShareInput"
+    ExpenseShare:
+      type: object
+      required: [id, party_id, party_name, share_minor]
+      properties:
+        id:
+          type: string
+          format: uuid
+        party_id:
+          type: string
+          format: uuid
+        party_name:
+          type: string
+        share_minor:
+          type: integer
+          format: int64
+    ExpenseShareInput:
+      type: object
+      required: [party_id, share_minor]
+      properties:
+        party_id:
+          type: string
+          format: uuid
+        share_minor:
+          type: integer
+          format: int64
+    CurrencyCode:
+      type: string
+      enum: [RUB, EUR, USD, KZT, JPY]
+    BalancesEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Balances"
+    Balances:
+      type: object
+      required: [currencies]
+      properties:
+        currencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CurrencyBalance"
+    CurrencyBalance:
+      type: object
+      required: [currency, members, simplified_transfers]
+      properties:
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/MemberBalance"
+        simplified_transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transfer"
+    MemberBalance:
+      type: object
+      required: [party_id, display_name, balance_minor]
+      properties:
+        party_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        balance_minor:
+          type: integer
+          format: int64
+    Transfer:
+      type: object
+      required: [from_party_id, from_name, to_party_id, to_name, amount_minor]
+      properties:
+        from_party_id:
+          type: string
+          format: uuid
+        from_name:
+          type: string
+        to_party_id:
+          type: string
+          format: uuid
+        to_name:
+          type: string
+        amount_minor:
+          type: integer
+          format: int64
+    WidgetEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Widget"
+    Widget:
+      type: object
+      required: [trip_id, trip_title, route_progress_percent, generated_at]
+      properties:
+        trip_id:
+          type: string
+          format: uuid
+        trip_title:
+          type: string
+        next_city:
+          anyOf:
+            - $ref: "#/components/schemas/WidgetCity"
+            - type: "null"
+        nearest_planned_day:
+          anyOf:
+            - $ref: "#/components/schemas/WidgetPlannedDay"
+            - type: "null"
+        nearest_activity:
+          anyOf:
+            - $ref: "#/components/schemas/NearestActivity"
+            - type: "null"
+        route_progress_percent:
+          type: integer
+        generated_at:
+          type: string
+          format: date-time
+    WidgetCity:
+      type: object
+      required: [name, date, days_until]
+      properties:
+        name:
+          type: string
+        date:
+          type: string
+          format: date
+        days_until:
+          type: integer
+    WidgetPlannedDay:
+      type: object
+      required: [date]
+      properties:
+        date:
+          type: string
+          format: date
+    NearestActivity:
+      type: object
+      required: [id, source_day_id, title]
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_day_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        start_at:
+          type: [string, "null"]
+          format: date-time
+        period:
+          anyOf:
+            - $ref: "#/components/schemas/PlanPeriod"
+            - type: "null"
+    ImportLocalDataRequest:
+      type: object
+      required: [trips]
+      properties:
+        trips:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateTripRequest"
+    ImportLocalDataEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [created_trip_ids]
+          properties:
+            created_trip_ids:
+              type: array
+              items:
                 type: string
-              reason:
-                type: string
+                format: uuid
+    ListMeta:
+      type: object
+      properties:
+        next_cursor:
+          type: [string, "null"]

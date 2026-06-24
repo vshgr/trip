@@ -1,79 +1,71 @@
-# Backend Architecture
+# Архитектура Backend
 
-## C4 Context
+## Почему modular monolith
 
-```mermaid
-C4Context
-    title Trip Backend Context
-    Person(user, "Traveler", "Plans trips and expenses on iOS")
-    System(ios, "Trip iOS App", "SwiftUI app with local cache")
-    System(widget, "Trip Widget", "WidgetKit extension reading App Group cache")
-    System(api, "Trip Backend", "Go modular monolith")
-    SystemDb(db, "PostgreSQL", "Source of truth")
-    Rel(user, ios, "Uses")
-    Rel(ios, api, "Syncs via HTTPS JSON")
-    Rel(api, db, "Reads/writes")
-    Rel(ios, widget, "Writes App Group cache")
-```
+Backend выбран как Go modular monolith, потому что продукт находится на ранней стадии, команда маленькая, а домены тесно связаны: поездка, маршрут, расходы, участники и виджет используют одни и те же данные.
 
-## C4 Container
+Микросервисы сейчас были бы преждевременной сложностью: отдельные деплои, сетевые ошибки, распределенные транзакции и синхронизация данных усложнили бы разработку без ощутимой пользы.
+
+Modular monolith дает середину:
+
+- один процесс и одна база проще для локальной разработки и деплоя;
+- доменные границы внутри кода остаются видимыми;
+- при росте продукта модули можно будет выделять отдельно;
+- транзакции PostgreSQL остаются простыми и надежными.
+
+## Контекст
 
 ```mermaid
 flowchart LR
-    ios["iOS App"]
-    api["HTTP API"]
-    identity["Identity"]
-    trips["Trips"]
-    itinerary["Itinerary"]
-    expenses["Expenses"]
-    widgets["Widgets Read Model"]
-    receipts["Receipts"]
+    user["Пользователь"]
+    ios["iOS-приложение Trip"]
+    widget["Trip Widget"]
+    api["Go Backend API"]
     db[("PostgreSQL")]
+    yandex["Яндекс ID"]
 
+    user --> ios
     ios --> api
-    api --> identity
-    api --> trips
-    api --> itinerary
-    api --> expenses
-    api --> widgets
-    api --> receipts
-    identity --> db
-    trips --> db
-    itinerary --> db
-    expenses --> db
-    widgets --> db
-    receipts --> db
+    ios --> widget
+    api --> db
+    ios --> yandex
+    api --> yandex
 ```
 
-## Components
+## Основные части
 
-- `internal/platform`: config, database, logging, auth, clock, HTTP helpers.
-- `internal/identity`: users, sessions, tokens.
-- `internal/trips`: trips, cities, members, invitations, parties, access policy.
-- `internal/itinerary`: days, plan items, schedule validation, occupancy.
-- `internal/expenses`: money, expense shares, balances, simplified transfers.
-- `internal/widgets`: aggregate read-only widget data.
-- `internal/receipts`: receipt upload/processing model prepared for later OCR.
+- `cmd/api`: запуск HTTP API.
+- `cmd/migrate`: применение SQL-миграций.
+- `internal/platform`: конфигурация, база, HTTP helpers, middleware, logging.
+- `internal/itinerary/domain`: расчет занятости расписания.
+- `internal/expenses/domain`: деньги, валюты, split-логика.
+- `db/migrations`: PostgreSQL schema, seed, новые изменения.
+- `api/openapi.yaml`: контракт для iOS и Swagger UI.
 
-## Dependency Rules
+## Правила зависимостей
 
-- HTTP handlers call application use cases.
-- Application layer manages transactions.
-- Domain packages contain business rules and have no HTTP/SQL dependencies.
-- Repository packages implement storage details.
-- API DTOs do not become domain entities.
+- HTTP handlers принимают request/response и вызывают работу с БД.
+- Доменная логика не должна зависеть от HTTP.
+- Деньги и расписание считаются в domain-пакетах.
+- API DTO не должны подменять доменные модели iOS.
 
-## Transactions
+## Транзакции
 
-Transactions are required for trip creation, date-range changes, invitations, ownership transfer, expense/share changes, reorder operations, local imports, and receipt-to-expense conversion.
+Транзакции нужны для операций, где меняется несколько таблиц:
 
-## Security Model
+- создание поездки, городов, участников и дней;
+- создание/обновление расхода и его долей;
+- импорт локальных данных;
+- будущие приглашения и перенос владельца поездки.
 
-- User authentication uses short-lived JWT access tokens and hashed refresh tokens.
-- Authorization is centralized through trip policies.
-- Unknown or unauthorized foreign resources should generally return 404.
-- Passwords, refresh tokens, access tokens, invitation tokens, and receipt contents are never logged.
+## Безопасность
 
-## Offline Strategy
+- Access token короткоживущий.
+- Refresh token хранится в базе только в виде hash.
+- Пароли локального входа хранятся в hash-виде.
+- Яндекс ID проверяется через `login.yandex.ru/info`.
+- В production нужно включить обязательную проверку `Authorization` и membership-политики.
 
-The backend becomes the source of truth, but the iOS app keeps UserDefaults/App Group cache for fast open, temporary offline use, WidgetKit, and gradual migration.
+## Soft delete
+
+Физическое удаление пользовательских данных не используется для поездок, plan items и expenses. Вместо этого выставляется `deleted_at`. Это позволяет добавить восстановление и снижает риск случайной потери данных.
